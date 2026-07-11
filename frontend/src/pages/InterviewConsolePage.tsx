@@ -22,7 +22,7 @@ import {
 
 type FlowPhase = 'idle' | 'starting' | 'speaking' | 'listening' | 'submitting' | 'thinking' | 'completed';
 
-const SKIP_ANSWER_TEXT = 'The candidate did not provide an answer within the allotted time.';
+const SKIP_ANSWER_TEXT = 'No answer response was provided.';
 
 export default function InterviewConsolePage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -35,6 +35,7 @@ export default function InterviewConsolePage() {
     currentQuestion,
     lastEvaluation,
     loadError,
+    requestNextQuestion,
   } = useInterviewSocket(sessionId!);
 
   const { data: session } = useQuery({
@@ -62,9 +63,19 @@ export default function InterviewConsolePage() {
   const phaseRef = useRef<FlowPhase>('idle');
   const questionNumberRef = useRef(0);
 
+  const submitPendingRef = useRef(false);
+  const pendingAnswerTextRef = useRef('');
+
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
+
+  // Sync speech recognition liveText to userTranscript editable state
+  useEffect(() => {
+    if (recognition.liveText) {
+      setUserTranscript(recognition.liveText);
+    }
+  }, [recognition.liveText]);
 
   const addLine = useCallback((line: Omit<TimelineLine, 'id'>) => {
     setLines((prev) => [...prev, { ...line, id: crypto.randomUUID() }]);
@@ -80,7 +91,7 @@ export default function InterviewConsolePage() {
   }, [primeSpeech, audio]);
 
   const handleStartRecording = useCallback(() => {
-    if (phaseRef.current !== 'speaking') return;
+    if (phaseRef.current !== 'speaking' && phaseRef.current !== 'idle') return;
     stopSpeaking();
     // Start audio recording and live speech recognition (if supported).
     audio.startRecording().catch(() => {});
@@ -91,19 +102,14 @@ export default function InterviewConsolePage() {
       // ignore if browser does not support Web Speech API
     }
     setPhase('listening');
-  }, [stopSpeaking, audio]);
+  }, [stopSpeaking, audio, recognition]);
 
-  const handleSubmitAnswer = useCallback(async () => {
+  const performSubmit = useCallback(async (blob: Blob | null) => {
     const attemptId = attemptRef.current;
-    if (!sessionId || !attemptId || submittingRef.current || phaseRef.current !== 'listening') return;
-
-    submittingRef.current = true;
-    setPhase('submitting');
+    if (!sessionId || !attemptId) return;
 
     try {
-      const blob = audio.audioBlob;
-      // include live transcript when available; always send audio blob if present
-      const answerText = recognition.liveText || userTranscript || undefined;
+      const answerText = pendingAnswerTextRef.current;
       if (blob) {
         await submitAnswer(sessionId, attemptId, answerText, blob);
       } else if (answerText) {
@@ -111,18 +117,59 @@ export default function InterviewConsolePage() {
       } else {
         await submitAnswer(sessionId, attemptId, SKIP_ANSWER_TEXT);
       }
-      addLine({ role: 'candidate', text: recognition.liveText || userTranscript || 'Answer submitted', meta: blob ? 'Audio' : 'Text' });
+      addLine({ role: 'candidate', text: answerText || 'Answer submitted', meta: blob ? 'Audio' : 'Text' });
       setPhase('thinking');
       audio.reset();
-      recognition.stopListening();
       setUserTranscript('');
     } catch (err) {
       setErrorMessage(getErrorMessage(err));
       setPhase('listening');
     } finally {
       submittingRef.current = false;
+      submitPendingRef.current = false;
     }
-  }, [sessionId, userTranscript, audio, addLine]);
+  }, [sessionId, addLine, audio]);
+
+  // Effect to wait for audioBlob to be ready if submit was clicked during recording
+  useEffect(() => {
+    if (submitPendingRef.current && audio.audioBlob) {
+      void performSubmit(audio.audioBlob);
+    }
+  }, [audio.audioBlob, performSubmit]);
+
+  const handleSubmitAnswer = useCallback(async () => {
+    const attemptId = attemptRef.current;
+    const currentPhase = phaseRef.current;
+    const isValidPhase = currentPhase === 'listening' || currentPhase === 'idle' || currentPhase === 'speaking';
+    
+    if (!sessionId || !attemptId || submittingRef.current || !isValidPhase) return;
+
+    submittingRef.current = true;
+    setPhase('submitting');
+
+    const answerText = userTranscript || recognition.liveText || '';
+    pendingAnswerTextRef.current = answerText;
+
+    if (audio.isRecording) {
+      submitPendingRef.current = true;
+      audio.stopRecording();
+      try {
+        recognition.stopListening();
+      } catch {}
+      
+      // Safety timeout: if blob doesn't arrive in 800ms, submit text-only
+      window.setTimeout(() => {
+        if (submitPendingRef.current) {
+          void performSubmit(null);
+        }
+      }, 800);
+    } else {
+      try {
+        recognition.stopListening();
+      } catch {}
+      void performSubmit(null);
+    }
+  }, [sessionId, userTranscript, audio, recognition, performSubmit]);
 
   const handleEndInterview = useCallback(async () => {
     stopSpeaking();
@@ -136,7 +183,7 @@ export default function InterviewConsolePage() {
       } catch {}
       navigate(`/sessions/${sessionId}/report`);
     }
-  }, [stopSpeaking, audio, sessionId, navigate]);
+  }, [stopSpeaking, audio, sessionId, navigate, recognition]);
 
   // --- Handle new question ---
   const deliverQuestion = useCallback(
@@ -228,7 +275,7 @@ export default function InterviewConsolePage() {
       } catch {}
       audio.reset();
     };
-  }, [stopSpeaking, audio]);
+  }, [stopSpeaking, audio, recognition]);
 
   const displayQuestion = currentQuestion
     ? formatQuestionDisplay(currentQuestion.question_text)
@@ -327,7 +374,8 @@ export default function InterviewConsolePage() {
                     needsConsent={false}
                     isStarting={phase === 'starting'}
                     onGrantConsent={() => {}}
-                    liveText={recognition.liveText}
+                    userTranscript={userTranscript}
+                    onTranscriptChange={setUserTranscript}
                   />
                 </div>
                 {/* Control buttons */}
@@ -335,35 +383,64 @@ export default function InterviewConsolePage() {
                   {phase === 'idle' && !currentQuestion && (
                     <button
                       onClick={handleStartInterview}
-                      className="rounded-lg bg-[var(--color-primary)] px-6 py-2 text-sm font-medium text-white hover:opacity-90"
+                      className="rounded-lg bg-[var(--color-primary)] px-6 py-2 text-sm font-medium text-white hover:opacity-90 shadow-sm"
                     >
                       Start Interview
                     </button>
                   )}
-                  {phase === 'speaking' && (
+
+                  {phase === 'idle' && lastEvaluation && !sessionComplete && (
+                    <button
+                      onClick={async () => {
+                        setPhase('thinking');
+                        await requestNextQuestion();
+                      }}
+                      className="rounded-lg bg-teal-600 px-6 py-2 text-sm font-semibold text-white hover:bg-teal-700 shadow-sm transition-colors duration-150"
+                    >
+                      Next Question
+                    </button>
+                  )}
+                  
+                  {/* Show recording button if a question is active but we are not recording/submitting/thinking */}
+                  {(phase === 'speaking' || (phase === 'idle' && currentQuestion)) && (
                     <>
                       <button
                         onClick={handleStartRecording}
-                        className="rounded-lg bg-blue-500 px-6 py-2 text-sm font-medium text-white hover:bg-blue-600"
+                        className="rounded-lg bg-blue-600 px-6 py-2 text-sm font-medium text-white hover:bg-blue-700 shadow-sm transition-colors duration-150"
                       >
                         Start Recording Answer
                       </button>
-                      <button
-                        onClick={() => {
-                          stopSpeaking();
-                          setPhase('idle');
-                        }}
-                        className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                      >
-                        Skip Speaking
-                      </button>
+
+                      {/* Allow manual submit of typed answers or edits */}
+                      {userTranscript.trim().length > 0 && (
+                        <button
+                          onClick={handleSubmitAnswer}
+                          className="rounded-lg bg-green-600 px-6 py-2 text-sm font-medium text-white hover:bg-green-700 shadow-sm transition-colors duration-150"
+                          disabled={submittingRef.current}
+                        >
+                          Submit Answer
+                        </button>
+                      )}
+
+                      {phase === 'speaking' && (
+                        <button
+                          onClick={() => {
+                            stopSpeaking();
+                            setPhase('idle');
+                          }}
+                          className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          Skip Speaking
+                        </button>
+                      )}
                     </>
                   )}
+
                   {phase === 'listening' && (
                     <>
                       <button
                         onClick={handleSubmitAnswer}
-                        className="rounded-lg bg-green-500 px-6 py-2 text-sm font-medium text-white hover:bg-green-600"
+                        className="rounded-lg bg-emerald-600 px-6 py-2 text-sm font-medium text-white hover:bg-emerald-700 shadow-sm transition-colors duration-150"
                         disabled={submittingRef.current}
                       >
                         Submit Answer
@@ -382,8 +459,9 @@ export default function InterviewConsolePage() {
                       </button>
                     </>
                   )}
-                  {(phase === 'thinking' || phase === 'idle') && currentQuestion && (
-                    <p className="text-sm text-gray-600">Waiting for next question...</p>
+
+                  {(phase === 'thinking' || phase === 'submitting') && (
+                    <p className="text-sm text-gray-600 animate-pulse font-medium">Evaluating your answer, please wait...</p>
                   )}
                 </div>
               </div>

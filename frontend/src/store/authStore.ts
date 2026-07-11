@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import type { User } from '../api/types';
 import { login as apiLogin, logout as apiLogout, register as apiRegister } from '../api/auth';
 import type { LoginRequest, RegisterRequest } from '../api/types';
-import { DEMO_EMAIL, DEMO_PASSWORD, SKIP_AUTH } from '../config/auth';
+import { DEMO_EMAIL, SKIP_AUTH } from '../config/auth';
 
 interface AuthState {
   user: User | null;
@@ -70,60 +70,44 @@ export const useAuthStore = create<AuthState>()(
       },
 
       initializeAuth: async () => {
-        if (!SKIP_AUTH) {
-          set({ authReady: true });
-          return;
-        }
-
-        // Always fetch fresh tokens in dev — stale localStorage tokens break after SECRET_KEY/backend restart
-        try {
-          await get().login({ email: DEMO_EMAIL, password: DEMO_PASSWORD });
-        } catch {
-          try {
-            await get().register({
+        if (SKIP_AUTH) {
+          set({
+            user: {
+              id: '9cc71b23-2008-49a2-b351-d85bcbb049af',
               name: 'Demo User',
               email: DEMO_EMAIL,
-              password: DEMO_PASSWORD,
+              role: 'user',
               target_role: 'Software Engineer',
               experience_level: 'junior',
-            });
-          } catch {
-            set({
-              user: null,
-              accessToken: null,
-              refreshToken: null,
-              isAuthenticated: false,
-            });
-          }
+              is_active: true,
+            },
+            accessToken: 'dummy-token',
+            refreshToken: 'dummy-token',
+            isAuthenticated: true,
+            authReady: true,
+          });
+          return;
         }
         set({ authReady: true });
       },
 
       reauthenticate: async () => {
         if (!SKIP_AUTH) return false;
-        try {
-          await get().login({ email: DEMO_EMAIL, password: DEMO_PASSWORD });
-          return true;
-        } catch {
-          try {
-            await get().register({
-              name: 'Demo User',
-              email: DEMO_EMAIL,
-              password: DEMO_PASSWORD,
-              target_role: 'Software Engineer',
-              experience_level: 'junior',
-            });
-            return true;
-          } catch {
-            set({
-              user: null,
-              accessToken: null,
-              refreshToken: null,
-              isAuthenticated: false,
-            });
-            return false;
-          }
-        }
+        set({
+          user: {
+            id: '9cc71b23-2008-49a2-b351-d85bcbb049af',
+            name: 'Demo User',
+            email: DEMO_EMAIL,
+            role: 'user',
+            target_role: 'Software Engineer',
+            experience_level: 'junior',
+            is_active: true,
+          },
+          accessToken: 'dummy-token',
+          refreshToken: 'dummy-token',
+          isAuthenticated: true,
+        });
+        return true;
       },
 
       setTokens: (access, refresh) =>

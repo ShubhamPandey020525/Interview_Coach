@@ -1,0 +1,7 @@
+{
+  "venvPath": "C:\\Users\\pande\\miniconda3\\envs",
+  "venv": "ai-interview",
+  "extraPaths": [
+    "./backend"
+  ]
+}

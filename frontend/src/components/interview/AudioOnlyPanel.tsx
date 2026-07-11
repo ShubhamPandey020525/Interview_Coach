@@ -8,7 +8,8 @@ interface AudioOnlyPanelProps {
   needsConsent: boolean;
   isStarting?: boolean;
   onGrantConsent: () => void;
-  liveText?: string;
+  userTranscript: string;
+  onTranscriptChange: (text: string) => void;
 }
 
 export default function AudioOnlyPanel({
@@ -21,13 +22,14 @@ export default function AudioOnlyPanel({
   needsConsent,
   isStarting = false,
   onGrantConsent,
-  liveText,
+  userTranscript,
+  onTranscriptChange,
 }: AudioOnlyPanelProps) {
   if (needsConsent) {
     return (
       <div className="flex h-full flex-col items-center justify-center rounded-xl border border-teal-200 bg-teal-50/80 p-4 text-center">
         <p className="mb-3 text-xs text-teal-900">
-          Fully automated voice interview — Priya asks, you answer, everything runs automatically.
+          Fully automated voice interview — James asks, you answer, everything runs automatically.
         </p>
         <button
           onClick={onGrantConsent}
@@ -47,57 +49,121 @@ export default function AudioOnlyPanel({
     );
   }
 
-  const statusText = isStarting
-    ? 'Starting interview…'
-    : isSpeaking
-    ? 'Priya is speaking…'
-    : isProcessing
-    ? 'Processing…'
-    : isRecording
-    ? 'Your turn — speak now'
-    : 'Stand by…';
-
   return (
-    <div className="flex h-full flex-col justify-center rounded-xl border border-gray-200 bg-slate-50 p-3">
-      <p className="mb-2 text-center text-xs font-medium text-gray-700">{statusText}</p>
+    <div className="flex h-full flex-col justify-between rounded-xl border border-gray-200 bg-slate-50 p-4 shadow-inner">
+      {/* Visualizer panel */}
+      <div className="flex-1 flex flex-col items-center justify-center min-h-[160px]">
+        {isSpeaking && (
+          <div className="flex flex-col items-center animate-fade-in">
+            {/* AI speaking wave */}
+            <div className="relative flex items-center justify-center w-24 h-24 rounded-full bg-blue-50">
+              <div className="absolute w-20 h-20 rounded-full bg-blue-100 animate-ping opacity-60" style={{ animationDuration: '2s' }} />
+              <div className="absolute w-16 h-16 rounded-full bg-blue-200 animate-pulse" />
+              <svg className="w-8 h-8 text-blue-600 z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+              </svg>
+            </div>
+            <p className="mt-4 text-sm font-semibold text-blue-700 tracking-wide animate-pulse">
+              James is speaking...
+            </p>
+            <span className="text-[10px] text-gray-500 uppercase mt-0.5 tracking-wider">AI Voice</span>
+          </div>
+        )}
 
-      <div className="flex h-8 items-end justify-center gap-0.5">
-        {Array.from({ length: 24 }).map((_, i) => {
-          const threshold = (i / 24) * 100;
-          const active = isRecording && audioLevel >= threshold;
-          const pulse = isStarting && !isRecording && i % 3 === 0;
-          return (
-            <div
-              key={i}
-              className={`w-1 rounded-full transition-all ${
-                active ? 'bg-emerald-500' : pulse ? 'animate-pulse bg-teal-400' : 'bg-gray-300'
-              }`}
-              style={{ height: active ? `${8 + (audioLevel / 100) * 20}px` : '6px' }}
-            />
-          );
-        })}
-      </div>
-
-      <div className="mt-2 flex items-center justify-center gap-2 text-[10px] text-gray-500">
         {isRecording && (
-          <>
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
-            <span>{formattedDuration}</span>
-          </>
+          <div className="flex flex-col items-center animate-fade-in">
+            {/* Candidate recording mic */}
+            <div className="relative flex items-center justify-center w-24 h-24 rounded-full bg-emerald-50">
+              <div className="absolute w-20 h-20 rounded-full bg-emerald-100 animate-ping opacity-75" style={{ animationDuration: '1.5s' }} />
+              <div className="absolute w-16 h-16 rounded-full bg-emerald-200 animate-pulse" />
+              <svg className="w-8 h-8 text-emerald-600 z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+              </svg>
+            </div>
+            <p className="mt-4 text-sm font-semibold text-emerald-700 tracking-wide">
+              Taking input...
+            </p>
+            <span className="text-[10px] text-red-500 font-mono font-medium animate-pulse mt-0.5">
+              Recording • {formattedDuration}
+            </span>
+          </div>
         )}
-        {isSpeaking && <span className="text-blue-600">AI speaking</span>}
-        {isProcessing && <span className="text-amber-600">Evaluating</span>}
-        {isStarting && !isRecording && !isSpeaking && (
-          <span className="text-teal-600">Connecting voice &amp; mic…</span>
+
+        {isProcessing && (
+          <div className="flex flex-col items-center">
+            {/* Loading/evaluating spinner */}
+            <div className="relative flex items-center justify-center w-20 h-20">
+              <div className="w-12 h-12 rounded-full border-4 border-amber-200 border-t-amber-600 animate-spin" />
+            </div>
+            <p className="mt-3 text-sm font-medium text-amber-700">
+              Evaluating your answer...
+            </p>
+            <span className="text-[10px] text-gray-500 mt-0.5">Analyzing speech &amp; depth</span>
+          </div>
+        )}
+
+        {isStarting && !isRecording && !isSpeaking && !isProcessing && (
+          <div className="flex flex-col items-center">
+            <div className="w-12 h-12 rounded-full border-4 border-teal-200 border-t-teal-600 animate-spin" />
+            <p className="mt-3 text-sm font-medium text-teal-700">Starting interview...</p>
+            <span className="text-[10px] text-gray-500 mt-0.5">Connecting voice &amp; mic...</span>
+          </div>
+        )}
+
+        {!isSpeaking && !isRecording && !isProcessing && !isStarting && (
+          <div className="flex flex-col items-center">
+            {/* Standby State */}
+            <div className="flex items-center justify-center w-20 h-20 rounded-full bg-gray-100">
+              <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+            </div>
+            <p className="mt-3 text-sm font-medium text-gray-600">Standby</p>
+            <span className="text-[10px] text-gray-400 mt-0.5">Ready for next step</span>
+          </div>
         )}
       </div>
 
-      {liveText && (
-        <div className="mt-3 px-3 text-sm text-gray-700">
-          <p className="text-xs text-gray-500 mb-1">Live transcription</p>
-          <div className="truncate rounded bg-white/50 px-2 py-1 text-sm text-gray-800">{liveText}</div>
+      {/* Audio Level Waveform Indicator (only shown while recording) */}
+      {isRecording && (
+        <div className="my-3 flex h-8 items-end justify-center gap-0.5 bg-emerald-50/50 py-1 rounded-lg">
+          {Array.from({ length: 24 }).map((_, i) => {
+            const threshold = (i / 24) * 100;
+            const active = audioLevel >= threshold;
+            return (
+              <div
+                key={i}
+                className={`w-1 rounded-full transition-all ${
+                  active ? 'bg-emerald-500' : 'bg-gray-300'
+                }`}
+                style={{ height: active ? `${8 + (audioLevel / 100) * 18}px` : '4px' }}
+              />
+            );
+          })}
         </div>
       )}
+
+      {/* Editable live transcription box */}
+      <div className="mt-3 bg-white rounded-lg border border-gray-200 p-2 shadow-sm">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+            Your Answer (Editable Transcription)
+          </span>
+          {isRecording && (
+            <span className="flex items-center gap-1 text-[9px] text-emerald-600 font-medium">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
+              Live Transcribing...
+            </span>
+          )}
+        </div>
+        <textarea
+          rows={3}
+          value={userTranscript}
+          onChange={(e) => onTranscriptChange(e.target.value)}
+          placeholder={isRecording ? "Speak into your mic. Your speech will appear here. Feel free to edit..." : "Type your answer here or click Start Recording..."}
+          className="w-full text-xs text-gray-700 bg-slate-50/50 hover:bg-slate-50 focus:bg-white rounded border border-gray-200 p-1.5 focus:border-teal-500 focus:outline-none resize-none transition-colors duration-150 whitespace-pre-wrap max-h-32 overflow-y-auto"
+        />
+      </div>
     </div>
   );
 }

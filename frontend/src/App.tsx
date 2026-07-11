@@ -10,13 +10,9 @@ import ProtectedRoute from './components/layout/ProtectedRoute';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
-import OnboardingPage from './pages/OnboardingPage';
 import DashboardPage from './pages/DashboardPage';
 import InterviewConsolePage from './pages/InterviewConsolePage';
 import SessionReportPage from './pages/SessionReportPage';
-import ProgressPage from './pages/ProgressPage';
-import LearningPlanPage from './pages/LearningPlanPage';
-import ProfilePage from './pages/ProfilePage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -49,8 +45,8 @@ function BackendStatus() {
 }
 
 function GuestRoute({ children }: { children: React.ReactNode }) {
-  if (SKIP_AUTH) return <Navigate to="/dashboard" replace />;
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  if (SKIP_AUTH) return <Navigate to="/dashboard" replace />;
   if (isAuthenticated) return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 }
@@ -69,13 +65,9 @@ export default function App() {
             <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
             <Route path="/signup" element={<GuestRoute><SignupPage /></GuestRoute>} />
             <Route element={<AppLayout />}>
-              <Route path="/onboarding" element={<ProtectedRoute><OnboardingPage /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
               <Route path="/interview/:sessionId" element={<ProtectedRoute><InterviewConsolePage /></ProtectedRoute>} />
               <Route path="/sessions/:sessionId/report" element={<ProtectedRoute><SessionReportPage /></ProtectedRoute>} />
-              <Route path="/progress" element={<ProtectedRoute><ProgressPage /></ProtectedRoute>} />
-              <Route path="/learning-plan" element={<ProtectedRoute><LearningPlanPage /></ProtectedRoute>} />
-              <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
             </Route>
           </Routes>
         </BrowserRouter>

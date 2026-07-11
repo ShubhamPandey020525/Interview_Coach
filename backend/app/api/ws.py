@@ -1,8 +1,8 @@
 import json
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from sqlalchemy import select
 
 from app.agents.graph import get_interview_graph
 from app.api.sessions import (
@@ -12,11 +12,12 @@ from app.api.sessions import (
     register_ws_connection,
     unregister_ws_connection,
 )
-from app.core.security import verify_access_token
-from app.database import AsyncSessionLocal
-from app.models.evaluation_signal import EvaluationSignal
-from app.models.interview_session import InterviewSession
-from app.models.question_attempt import QuestionAttempt
+from app.store import (
+    _in_memory_sessions,
+    _in_memory_attempts,
+    InMemoryModel,
+    DEMO_USER_ID,
+)
 from app.utils.question_text import strip_question_metadata
 
 router = APIRouter(tags=["websocket"])
@@ -24,24 +25,17 @@ router = APIRouter(tags=["websocket"])
 
 @router.websocket("/ws/sessions/{session_id}")
 async def interview_websocket(websocket: WebSocket, session_id: str, token: str = ""):
-    payload = verify_access_token(token)
-    if not payload:
+    user_id = str(DEMO_USER_ID)
+
+    session = _in_memory_sessions.get(uuid.UUID(session_id))
+    if not session or str(session.user_id) != user_id:
         await websocket.close(code=4401)
         return
 
-    user_id = payload.get("sub")
-
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(select(InterviewSession).where(InterviewSession.id == uuid.UUID(session_id)))
-        session = result.scalar_one_or_none()
-        if not session or str(session.user_id) != user_id:
-            await websocket.close(code=4401)
-            return
-
-        try:
-            await ensure_graph_session_initialized(db, session)
-        except Exception:
-            pass
+    try:
+        await ensure_graph_session_initialized(session)
+    except Exception:
+        pass
 
     await websocket.accept()
     register_ws_connection(session_id, websocket)
@@ -72,24 +66,25 @@ async def interview_websocket(websocket: WebSocket, session_id: str, token: str 
                 graph = get_interview_graph()
                 eval_result = await graph.submit_answer(session_id, text or "")
 
-                async with AsyncSessionLocal() as db:
-                    result = await db.execute(
-                        select(QuestionAttempt).where(QuestionAttempt.id == uuid.UUID(attempt_id))
+                attempt = _in_memory_attempts.get(uuid.UUID(attempt_id))
+                if attempt:
+                    attempt.answer_text = text
+                    attempt.score = eval_result["score"]
+                    attempt.best_answer = eval_result.get("best_answer")
+                    attempt.user_answer_comparison = eval_result.get("user_answer_comparison")
+                    attempt.filler_word_count = eval_result.get("filler_word_count")
+                    attempt.metrics = eval_result.get("metrics")
+                    attempt.factual_inaccuracies = eval_result.get("factual_inaccuracies")
+                    attempt.weighted_breakdown = eval_result.get("weighted_breakdown")
+                    
+                    signal = InMemoryModel(
+                        type="technical"
+                        if eval_result["agent_type"] in ("technical", "followup")
+                        else "communication",
+                        score=eval_result["score"],
+                        notes=eval_result["reasoning"],
                     )
-                    attempt = result.scalar_one_or_none()
-                    if attempt:
-                        attempt.answer_text = text
-                        attempt.score = eval_result["score"]
-                        signal = EvaluationSignal(
-                            attempt_id=attempt.id,
-                            type="technical"
-                            if eval_result["agent_type"] in ("technical", "followup")
-                            else "communication",
-                            score=eval_result["score"],
-                            notes=eval_result["reasoning"],
-                        )
-                        db.add(signal)
-                        await db.commit()
+                    attempt.evaluation_signals = [signal]
 
                 await broadcast_to_session(
                     session_id,
@@ -111,80 +106,81 @@ async def interview_websocket(websocket: WebSocket, session_id: str, token: str 
                     },
                 )
 
-                await _broadcast_next_question_or_complete(session_id)
-
     except WebSocketDisconnect:
         pass
     finally:
         unregister_ws_connection(session_id, websocket)
 
 
-async def _get_current_or_next_attempt(session_id: str, session: InterviewSession) -> dict | None:
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            select(QuestionAttempt)
-            .where(QuestionAttempt.session_id == uuid.UUID(session_id))
-            .order_by(QuestionAttempt.sequence_number.desc())
-            .limit(1)
-        )
-        attempt = result.scalar_one_or_none()
+async def _get_current_or_next_attempt(session_id: str, session) -> dict | None:
+    session_uuid = uuid.UUID(session_id)
+    attempts = [a for a in _in_memory_attempts.values() if a.session_id == session_uuid]
+    attempts.sort(key=lambda a: a.sequence_number)
 
-        if attempt and not attempt.answer_text and not attempt.audio_ref and not attempt.video_ref:
+    if attempts:
+        attempt = attempts[-1]
+        if not attempt.answer_text and not attempt.audio_ref and not attempt.video_ref:
             return {
                 "attempt_id": str(attempt.id),
                 "agent_type": attempt.agent_type,
                 "question_text": strip_question_metadata(attempt.question_text),
             }
 
-        if session.status == "completed":
-            return None
+    if session.status == "completed":
+        return None
 
-        graph = get_interview_graph()
-        try:
-            result = await graph.get_next_question(session_id)
-        except (ValueError, Exception):
-            return None
+    graph = get_interview_graph()
+    try:
+        result = await graph.get_next_question(session_id)
+    except (ValueError, Exception):
+        return None
 
-        if result.get("stage") == "complete":
-            await broadcast_to_session(
-                session_id,
-                {
-                    "type": "session_complete",
-                    "payload": {"report_url": f"/api/sessions/{session_id}/report"},
-                },
-            )
-            return None
-
-        question_text = result.get("question")
-        if not question_text:
-            return None
-
-        from datetime import datetime
-
-        count_result = await db.execute(
-            select(QuestionAttempt).where(QuestionAttempt.session_id == uuid.UUID(session_id))
+    if result.get("stage") == "complete":
+        await broadcast_to_session(
+            session_id,
+            {
+                "type": "session_complete",
+                "payload": {"report_url": f"/api/sessions/{session_id}/report"},
+            },
         )
-        seq = len(count_result.scalars().all()) + 1
+        return None
 
-        new_attempt = QuestionAttempt(
-            session_id=uuid.UUID(session_id),
-            agent_type=result.get("agent_type", "technical"),
-            question_text=question_text,
-            sequence_number=seq,
-        )
-        db.add(new_attempt)
+    question_text = result.get("question")
+    if not question_text:
+        return None
 
-        sess_result = await db.execute(select(InterviewSession).where(InterviewSession.id == uuid.UUID(session_id)))
-        sess = sess_result.scalar_one()
-        if sess.status == "created":
-            sess.status = "in_progress"
-            sess.start_time = datetime.utcnow()
-        sess.current_stage = result.get("agent_type", "technical")
-        db.add(sess)
-        await db.commit()
+    seq = len(attempts) + 1
 
-        return {
-            "attempt_id": str(new_attempt.id),
-            "agent_type": new_attempt.agent_type,
-            "question_text": strip_question_metadata(new_attempt.question_text),
-        }
+    new_attempt_id = uuid.uuid4()
+    new_attempt = InMemoryModel(
+        id=new_attempt_id,
+        session_id=session_uuid,
+        agent_type=result.get("agent_type", "technical"),
+        question_text=question_text,
+        sequence_number=seq,
+        answer_text=None,
+        audio_ref=None,
+        video_ref=None,
+        transcript=None,
+        score=None,
+        best_answer=None,
+        user_answer_comparison=None,
+        filler_word_count=None,
+        metrics=None,
+        factual_inaccuracies=None,
+        weighted_breakdown=None,
+        created_at=datetime.utcnow(),
+        evaluation_signals=[]
+    )
+    _in_memory_attempts[new_attempt_id] = new_attempt
+
+    if session.status == "created":
+        session.status = "in_progress"
+        session.start_time = datetime.utcnow()
+    session.current_stage = result.get("agent_type", "technical")
+
+    return {
+        "attempt_id": str(new_attempt.id),
+        "agent_type": new_attempt.agent_type,
+        "question_text": strip_question_metadata(new_attempt.question_text),
+    }

@@ -1,15 +1,13 @@
 import asyncio
 import logging
+import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, UploadFile
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.exceptions import AppException
-from app.database import get_db
-from app.models.resume_profile import ResumeProfile
-from app.models.user import User
+from app.store import _in_memory_resumes, InMemoryModel, MockUser as User
 from app.schemas import ResumeProfileResponse
 from app.agents.resume_context import is_resume_context_sufficient
 from app.services.llm_provider import get_llm_provider
@@ -27,7 +25,6 @@ LLM_PARSE_TIMEOUT_SEC = 18
 async def upload_resume(
     file: UploadFile = File(...),
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ):
     if not file:
         raise AppException("NO_FILE", "No file provided.", 422)
@@ -89,30 +86,25 @@ async def upload_resume(
             422,
         )
 
-    profile = ResumeProfile(
+    profile = InMemoryModel(
+        id=uuid.uuid4(),
         user_id=user.id,
         raw_file_path=relative_path,
         skills=parsed.get("skills", []),
         projects=parsed.get("projects", []),
         experience_summary=parsed.get("experience_summary", ""),
+        parsed_at=datetime.utcnow(),
+        created_at=datetime.utcnow()
     )
-    db.add(profile)
-    await db.flush()
+    _in_memory_resumes[user.id] = profile
     return ResumeProfileResponse.model_validate(profile)
 
 
 @router.get("/resume", response_model=ResumeProfileResponse)
 async def get_resume(
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(ResumeProfile)
-        .where(ResumeProfile.user_id == user.id)
-        .order_by(ResumeProfile.created_at.desc())
-        .limit(1)
-    )
-    profile = result.scalar_one_or_none()
+    profile = _in_memory_resumes.get(user.id)
     if not profile:
         raise AppException("RESUME_NOT_FOUND", "No resume uploaded yet.", 404)
     return ResumeProfileResponse.model_validate(profile)

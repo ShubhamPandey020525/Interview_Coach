@@ -5,7 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { useInterviewStore } from '../store/interviewStore';
 import type { WsEvaluationPayload, WsQuestionPayload } from '../api/types';
 
-const WS_BASE = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8000';
+const WS_BASE = import.meta.env.VITE_WS_BASE_URL || 'ws://127.0.0.1:8000';
 
 export function useInterviewSocket(sessionId: string) {
   const accessToken = useAuthStore((s) => s.accessToken);

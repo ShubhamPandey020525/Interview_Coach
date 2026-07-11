@@ -1,7 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getReport } from '../api/sessions';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function SessionReportPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -13,7 +12,13 @@ export default function SessionReportPage() {
   });
 
   if (isLoading) {
-    return <div className="space-y-4">{[1, 2, 3].map((i) => <div key={i} className="h-20 bg-gray-100 rounded-lg animate-pulse" />)}</div>;
+    return (
+      <div className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-20 bg-gray-100 rounded-lg animate-pulse" />
+        ))}
+      </div>
+    );
   }
 
   if (error) {
@@ -29,130 +34,121 @@ export default function SessionReportPage() {
 
   if (!report) return null;
 
-  const chartData = report.attempts.map((a, i) => ({
-    name: `Q${i + 1}`,
-    score: a.score ?? 0,
-  }));
-
   return (
     <div className="max-w-5xl mx-auto">
+      {/* Header Panel */}
       <div className="mb-8 rounded-2xl border border-teal-200 bg-gradient-to-r from-teal-50 to-white p-6">
-        <h1 className="text-2xl font-bold text-gray-900">Interview Complete</h1>
-        <p className="mt-1 text-gray-600">Here’s how you performed and what to focus on next.</p>
+        <h1 className="text-2xl font-bold text-gray-900">Interview Evaluation Report</h1>
+        <p className="mt-1 text-gray-600">Review your response transcripts, speech patterns, and ideal answers suggestions below.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white rounded-xl border border-gray-200 p-6 text-center">
-          <p className="text-sm text-gray-500">Overall Score</p>
-          <p className="text-4xl font-bold text-[var(--color-primary)]">{report.overall_score.toFixed(1)}</p>
-        </div>
+      {/* Strengths & Weaknesses Cards (No Scores/Numbers) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <p className="text-sm font-medium text-green-700 mb-2">Strengths</p>
-          <ul className="text-sm text-gray-600 space-y-1">
-            {report.strengths.map((s, i) => <li key={i}>• {s}</li>)}
+          <p className="text-sm font-bold text-emerald-800 uppercase tracking-wider mb-2">Strengths Identified</p>
+          <ul className="text-sm text-gray-700 space-y-1.5">
+            {report.strengths.map((s, i) => (
+              <li key={i} className="flex items-start">
+                <span className="text-emerald-500 mr-2">✓</span>
+                <span>{s}</span>
+              </li>
+            ))}
           </ul>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <p className="text-sm font-medium text-amber-700 mb-2">Areas to Improve</p>
-          <ul className="text-sm text-gray-600 space-y-1">
-            {report.weaknesses.map((w, i) => <li key={i}>• {w}</li>)}
+          <p className="text-sm font-bold text-amber-800 uppercase tracking-wider mb-2">Recommended Areas to Improve</p>
+          <ul className="text-sm text-gray-700 space-y-1.5">
+            {report.weaknesses.map((w, i) => (
+              <li key={i} className="flex items-start">
+                <span className="text-amber-500 mr-2">•</span>
+                <span>{w}</span>
+              </li>
+            ))}
           </ul>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-8">
-        <h2 className="font-semibold mb-4">Score Breakdown</h2>
-        <ResponsiveContainer width="100%" height={250}>
-          <BarChart data={chartData}>
-            <XAxis dataKey="name" />
-            <YAxis domain={[0, 100]} />
-            <Tooltip />
-            <Bar dataKey="score" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-8">
-        <h2 className="font-semibold mb-4">Q&A Timeline with Detailed Feedback</h2>
-        <div className="space-y-6">
+      {/* Q&A Detailed Performance Cards */}
+      <div className="bg-slate-50 rounded-xl border border-gray-200 p-6 mb-8 shadow-sm">
+        <h2 className="font-bold text-lg text-gray-900 mb-6">Detailed Q&A Performance Report</h2>
+        <div className="space-y-8">
           {report.attempts.map((a, i) => (
-            <div key={a.attempt_id} className="border-l-2 border-teal-300 pl-4">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{a.agent_type}</span>
-                <span className="text-sm font-medium">Q{i + 1}</span>
-                {a.score != null && <span className="text-sm text-teal-700">{a.score.toFixed(0)}%</span>}
+            <div key={a.attempt_id} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow duration-150">
+              {/* Card Header */}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-3 mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-white px-2 py-0.5 rounded bg-teal-600 capitalize">
+                    {a.agent_type} Stage
+                  </span>
+                  <span className="text-sm font-bold text-gray-700">Question {i + 1}</span>
+                </div>
               </div>
-              <p className="text-sm text-gray-800 font-medium mb-2">{a.question_text}</p>
+
+              {/* Question Text */}
+              <div className="mb-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Interviewer Question</p>
+                <p className="text-sm text-gray-900 font-semibold bg-slate-50 border border-slate-100 rounded-lg p-3 leading-relaxed">
+                  "{a.question_text}"
+                </p>
+              </div>
               
-              {a.answer_text && (
-                <div className="mb-3 p-3 bg-gray-50 rounded-lg">
-                  <p className="text-xs font-semibold text-gray-600 mb-1">Your Answer:</p>
-                  <p className="text-sm text-gray-700">{a.answer_text}</p>
+              {/* Side-by-Side Comparison */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                {/* User Answer Column */}
+                <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Your Answer</p>
+                    {a.filler_word_count != null && (
+                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                        a.filler_word_count > 0 
+                          ? 'bg-amber-100 text-amber-800' 
+                          : 'bg-emerald-100 text-emerald-800'
+                      }`}>
+                        {a.filler_word_count > 0 
+                          ? `⚠️ ${a.filler_word_count} filler words` 
+                          : '✓ No filler words'}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs leading-relaxed text-gray-700 bg-white border border-slate-100 rounded p-2.5 min-h-[100px] whitespace-pre-wrap">
+                    {a.answer_text || 'No answer provided.'}
+                  </p>
                 </div>
-              )}
 
-              {a.best_answer && (
-                <div className="mb-3 p-3 bg-green-50 rounded-lg">
-                  <p className="text-xs font-semibold text-green-700 mb-1">Best Answer Example:</p>
-                  <p className="text-sm text-gray-700">{a.best_answer}</p>
+                {/* Best Answer Column */}
+                <div className="rounded-lg border border-emerald-100 bg-emerald-50/20 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-emerald-700 mb-2">Model's Best Answer Example</p>
+                  <p className="text-xs leading-relaxed text-gray-800 bg-white border border-emerald-100 rounded p-2.5 min-h-[100px] whitespace-pre-wrap">
+                    {a.best_answer || 'Ideal answer suggestions are not available for this turn.'}
+                  </p>
                 </div>
-              )}
+              </div>
 
+              {/* Feedback and Comparison */}
               {a.user_answer_comparison && (
-                <div className="mb-3 p-3 bg-blue-50 rounded-lg">
-                  <p className="text-xs font-semibold text-blue-700 mb-1">Feedback:</p>
-                  <p className="text-sm text-gray-700">{a.user_answer_comparison}</p>
+                <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50/30 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-blue-700 mb-2">Feedback &amp; Key Differences</p>
+                  <p className="text-xs leading-relaxed text-gray-700 whitespace-pre-wrap">{a.user_answer_comparison}</p>
                 </div>
               )}
 
+              {/* Factual Inaccuracies */}
               {a.factual_inaccuracies && a.factual_inaccuracies.length > 0 && (
-                <div className="mb-3 p-3 bg-red-50 rounded-lg">
-                  <p className="text-xs font-semibold text-red-700 mb-1">Factual Inaccuracies:</p>
-                  <ul className="text-sm text-gray-700 space-y-1">
+                <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50/50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-rose-700 mb-2">⚠️ Factual Inaccuracies Spotted</p>
+                  <ul className="list-disc pl-4 space-y-1">
                     {a.factual_inaccuracies.map((inaccuracy, idx) => (
-                      <li key={idx}>• {inaccuracy}</li>
+                      <li key={idx} className="text-xs text-rose-950 font-medium">{inaccuracy}</li>
                     ))}
                   </ul>
                 </div>
               )}
-
-              {a.weighted_breakdown && (
-                <div className="mb-3 p-3 bg-purple-50 rounded-lg">
-                  <p className="text-xs font-semibold text-purple-700 mb-2">Weighted Score Breakdown:</p>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    {Object.entries(a.weighted_breakdown)
-                      .filter(([key]) => key !== 'total' && key !== 'weights')
-                      .map(([key, value]) => (
-                        <div key={key} className="flex justify-between">
-                          <span className="text-gray-600">
-                            {key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}:
-                          </span>
-                          <span className="font-medium text-gray-800">
-                            {typeof value === 'number' ? value.toFixed(1) : JSON.stringify(value)}
-                          </span>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex flex-wrap gap-4">
-                {a.filler_word_count != null && (
-                  <div className="text-xs text-gray-500">
-                    Filler Words: <span className="font-medium">{a.filler_word_count}</span>
-                  </div>
-                )}
-                {a.metrics && Object.entries(a.metrics).map(([key, value]) => (
-                  <div key={key} className="text-xs text-gray-500">
-                    {key.charAt(0).toUpperCase() + key.slice(1)}: <span className="font-medium">{String(value)}</span>
-                  </div>
-                ))}
-              </div>
             </div>
           ))}
         </div>
       </div>
 
+      {/* Recommended Resource Links (Bypass unused page routes) */}
       {report.learning_plan.weak_areas.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 p-6 mb-8">
           <h2 className="font-semibold mb-2">Recommended Next Steps</h2>
@@ -164,7 +160,7 @@ export default function SessionReportPage() {
             ))}
           </div>
           {report.learning_plan.recommended_resources.length > 0 && (
-            <ul className="mb-4 space-y-2 text-sm text-gray-600">
+            <ul className="mb-6 space-y-2 text-sm text-gray-600">
               {report.learning_plan.recommended_resources.slice(0, 3).map((r, i) => (
                 <li key={i}>
                   <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-teal-700 hover:underline">
@@ -177,20 +173,8 @@ export default function SessionReportPage() {
           )}
           <div className="flex gap-3">
             <Link
-              to="/learning-plan"
-              className="rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-            >
-              View Learning Plan
-            </Link>
-            <Link
-              to="/progress"
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-            >
-              Track Progress
-            </Link>
-            <Link
               to="/dashboard"
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700"
             >
               Practice Again
             </Link>

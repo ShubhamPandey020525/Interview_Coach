@@ -3,6 +3,16 @@ import { sanitizeQuestionForSpeech } from '../utils/speechText';
 
 function pickVoice(): SpeechSynthesisVoice | undefined {
   const voices = window.speechSynthesis.getVoices();
+  // Try to find an English male voice for James persona
+  const maleEnglish = voices.find((v) => {
+    const name = v.name.toLowerCase();
+    const isEnglish = v.lang.startsWith('en');
+    const isMaleKeyword = name.includes('male') || name.includes('david') || name.includes('microsoft david') || name.includes('google us english') || name.includes('mark') || name.includes('guy') || name.includes('brian');
+    const isFemaleKeyword = name.includes('female') || name.includes('zira') || name.includes('hazel') || name.includes('susan') || name.includes('haruka') || name.includes('heera');
+    return isEnglish && isMaleKeyword && !isFemaleKeyword;
+  });
+  if (maleEnglish) return maleEnglish;
+
   return (
     voices.find((v) => v.lang.startsWith('en-IN')) ||
     voices.find((v) => v.lang.startsWith('en') && v.name.toLowerCase().includes('female')) ||
@@ -74,14 +84,19 @@ export function useSpeechSynthesis() {
         };
 
         const run = async () => {
-          // Only cancel if not already speaking
-          if (!window.speechSynthesis.speaking) {
-            window.speechSynthesis.cancel();
-            await waitMs(100);
-          }
+          // Unconditionally cancel any previous speech synthesis to avoid queuing bugs
+          window.speechSynthesis.cancel();
+          await waitMs(100);
           window.speechSynthesis.resume();
 
           const utterance = new SpeechSynthesisUtterance(spokenText);
+
+          // Keep a global reference to prevent Chrome's garbage collection bug
+          if (typeof window !== 'undefined') {
+            (window as any)._activeUtterances = (window as any)._activeUtterances || [];
+            (window as any)._activeUtterances.push(utterance);
+          }
+
           utterance.rate = 0.9;
           utterance.pitch = 1;
           utterance.volume = 1;
@@ -94,8 +109,23 @@ export function useSpeechSynthesis() {
             speakingRef.current = true;
             callbacks?.onStart?.();
           };
-          utterance.onend = () => finish('end');
-          utterance.onerror = () => finish('error');
+
+          const cleanGlobalRef = () => {
+            if (typeof window !== 'undefined' && (window as any)._activeUtterances) {
+              (window as any)._activeUtterances = (window as any)._activeUtterances.filter(
+                (u: any) => u !== utterance
+              );
+            }
+          };
+
+          utterance.onend = () => {
+            cleanGlobalRef();
+            finish('end');
+          };
+          utterance.onerror = () => {
+            cleanGlobalRef();
+            finish('error');
+          };
 
           // Keep-alive to prevent Chrome from pausing
           const resumeId = window.setInterval(() => {
@@ -105,7 +135,10 @@ export function useSpeechSynthesis() {
 
           // Safety timeout
           const estimatedMs = Math.min(300000, Math.max(10000, spokenText.length * 150));
-          const timeoutId = window.setTimeout(() => finish('end'), estimatedMs);
+          const timeoutId = window.setTimeout(() => {
+            cleanGlobalRef();
+            finish('end');
+          }, estimatedMs);
           timersRef.current.push(timeoutId);
 
           window.speechSynthesis.speak(utterance);

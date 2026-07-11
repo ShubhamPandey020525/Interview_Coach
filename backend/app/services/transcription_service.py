@@ -30,6 +30,7 @@ class TranscriptionService:
             response = await client.audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file,
+                prompt="Um, uh, er, like, you know, basically, actually, so... this is a candidate response with filler words.",
             )
         return response.text
 

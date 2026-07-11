@@ -372,17 +372,28 @@ class OpenAILLMProvider(LLMProvider):
             history_summary = json.dumps(conversation_history[-8:]) if conversation_history else "[]"
 
             prompt = (
-                f"You are a live technical interviewer for a {target_role} role.\n"
+                f"You are a live senior technical interviewer for a {target_role} role. Your name is James.\n"
+                f"Your interview standard is extremely high, professional, and thorough.\n"
                 f"{RESUME_ONLY_RULES}\n"
                 f"Question type: {agent_type}\n"
             )
             if agent_type == "personality":
                 prompt += (
-                    "Ask the candidate about their resume: projects they've worked on, their role in those projects,\n"
-                    "their professional experience, achievements, teamwork, or challenges they've overcome, using ONLY information from their resume as context.\n"
+                    "Focus heavily on the candidate's achievements, extra-curriculars, or professional experience listed in their resume.\n"
+                    "Ask an insightful behavioral or project-leadership question. Select a specific role or experience item from their resume. For example:\n"
+                    "'At [Company Name], you worked as a [Role] and did [Achievement/Duty]. Walk me through your day-to-day there, the exact scale or challenges, and what leadership or teamwork lessons you learned.'\n"
+                    "Make sure you reference specific details, companies, or titles from their resume to make the question highly personal and non-generic.\n"
+                )
+            elif agent_type == "technical":
+                prompt += (
+                    f"Difficulty: {difficulty} (based on recent scores)\n"
+                    "Generate a deep, high-standard technical question centered on the projects and tech stack listed in their resume.\n"
+                    "Do NOT ask generic textbook definitions (e.g. 'What is FastAPI dependency injection?'). Instead, anchor it to their projects, e.g.:\n"
+                    "'In your project [Project Name], you used [Tech Stack/Database]. How did you design the database schema/API endpoints to support [Feature] and what trade-offs did you consider?' or 'How did you handle scaling/performance bottlenecks when using [Technology] in [Project]?'\n"
                 )
             else:
                 prompt += f"Difficulty: {difficulty} (based on recent scores)\n"
+
             prompt += (
                 f"CANDIDATE RESUME (only source of truth):\n{json.dumps(resume_context, indent=2)}\n"
                 f"Weak areas to probe from session: {json.dumps(weak_areas or [])}\n"
@@ -429,13 +440,21 @@ class OpenAILLMProvider(LLMProvider):
                 f"Answer: {answer}\n"
                 f"Resume context for relevance check: {json.dumps(resume_context or {})}\n"
                 "Please provide:\n"
-                "1. 'metrics': a dictionary with 'clarity' (1-10), 'relevance' (1-10), 'detail_level' (1-10), 'factual_accuracy' (1-10), 'confidence' (1-10)\n"
+                "1. 'metrics': a dictionary with: \n"
+                "   - 'clarity' (1-10)\n"
+                "   - 'relevance' (1-10)\n"
+                "   - 'detail_level' (1-10)\n"
+                "   - 'factual_accuracy' (1-10)\n"
+                "   - 'confidence' (1-10)\n"
+                "   - 'technical_depth' (1-10)\n"
+                "   - 'structure_and_flow' (1-10)\n"
+                "   - 'professionalism' (1-10)\n"
                 "2. 'reasoning': a short explanation of the evaluation\n"
-                "3. 'best_answer': an example of a strong, detailed answer to this question\n"
-                "4. 'user_answer_comparison': a comparison of the user's answer to the best answer, highlighting strengths and weaknesses\n"
-                "5. 'filler_word_count': count of filler words (um, uh, er, like, you know, so, sort of, kind of, basically, actually, i mean)\n"
+                "3. 'best_answer': a complete, detailed, senior-level example of the best possible answer to this question, grounded in their resume context. IMPORTANT: If the candidate's answer is already exceptionally good, comprehensive, correct, and technically sound, set 'best_answer' to exactly 'Your answer is already very good and covers all key aspects!' instead of generating an alternative example.\n"
+                "4. 'user_answer_comparison': a detailed comparison of the user's answer to the best answer, outlining what exactly is different, what key details or technical concepts the user missed, and how the user's answer matches up to the ideal standard. If their answer is already very good, highlight their key strengths.\n"
+                "5. 'filler_word_count': count of filler words in the user's answer (like: um, uh, er, like, you know, so, sort of, kind of, basically, actually, i mean)\n"
                 "6. 'factual_inaccuracies': a list of factual inaccuracies found in the answer (empty list if none)\n"
-                'Return JSON: {"metrics": {"clarity": 5, "relevance": 5, "detail_level": 5, "factual_accuracy": 5, "confidence": 5}, "reasoning": "...", "best_answer": "...", "user_answer_comparison": "...", "filler_word_count": 0, "factual_inaccuracies": []}'
+                'Return JSON: {"metrics": {"clarity": 5, "relevance": 5, "detail_level": 5, "factual_accuracy": 5, "confidence": 5, "technical_depth": 5, "structure_and_flow": 5, "professionalism": 5}, "reasoning": "...", "best_answer": "...", "user_answer_comparison": "...", "filler_word_count": 0, "factual_inaccuracies": []}'
             )
             response = await client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -446,7 +465,7 @@ class OpenAILLMProvider(LLMProvider):
             # Ensure metrics is a dict
             metrics = data.get("metrics", {})
             if not isinstance(metrics, dict):
-                metrics = {"clarity": 5, "relevance": 5, "detail_level":5, "factual_accuracy":5, "confidence":5}
+                metrics = {"clarity": 5, "relevance": 5, "detail_level": 5, "factual_accuracy": 5, "confidence": 5, "technical_depth": 5, "structure_and_flow": 5, "professionalism": 5}
             
             # Extract individual metrics, defaulting to 5
             clarity = float(metrics.get("clarity", 5))
