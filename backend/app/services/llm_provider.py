@@ -38,6 +38,10 @@ STRICT RULES (must follow):
 class LLMEvaluationResult:
     score: float
     reasoning: str
+    best_answer: str
+    user_answer_comparison: str
+    filler_word_count: int
+    metrics: dict  # Can include things like clarity, confidence, relevance, etc.
 
 
 @dataclass
@@ -142,6 +146,25 @@ def _generate_local_question(
             f"how would you design a solution for a production issue as a {target_role}? "
             f"Use only technologies listed on your resume."
         )
+    elif agent_type == "personality":
+        # Personality questions: ask about projects, experience, achievements from resume
+        projects = resume_context.get("projects") or []
+        experience = resume_context.get("experience_summary") or ""
+        if projects:
+            project = projects[turn % len(projects)]
+            name = project.get("name", "that project") if isinstance(project, dict) else str(project)
+            desc = project.get("description", "") if isinstance(project, dict) else ""
+            question = (
+                f"Tell me about the {name} project from your resume. What was your role, "
+                f"what challenges did you face, and how did you overcome them? {desc}"
+            )
+        elif experience:
+            question = (
+                f"Walk me through your professional experience as described in your resume. "
+                f"What are you most proud of achieving in your career so far?"
+            )
+        else:
+            question = "Tell me about a time you worked on a team project and what you learned from it."
     else:
         detail = focus.get("detail") or ""
         detail_part = f" ({detail})" if detail and detail != focus["name"] else ""
@@ -153,11 +176,38 @@ def _generate_local_question(
     return LLMQuestionResult(question=question)
 
 
+def _count_filler_words(text: str) -> int:
+    filler_words = {"um", "uh", "er", "like", "you know", "so", "sort of", "kind of", "basically", "actually", "i mean"}
+    words = text.lower().split()
+    count = 0
+    i = 0
+    while i < len(words):
+        # Check for multi-word fillers first
+        if i + 1 < len(words) and f"{words[i]} {words[i+1]}" in filler_words:
+            count +=1
+            i +=2
+        elif words[i] in filler_words:
+            count +=1
+            i +=1
+        else:
+            i +=1
+    return count
+
+
 def _evaluate_local(question: str, answer: str) -> LLMEvaluationResult:
     score = min(100.0, max(30.0, len(answer.split()) * 5))
+    filler_count = _count_filler_words(answer)
     return LLMEvaluationResult(
         score=score,
         reasoning=f"Resume-grounded evaluation: answer length and relevance to '{question[:60]}...'.",
+        best_answer=f"A strong answer would directly address the question, use specific examples from experience, and highlight relevant skills.",
+        user_answer_comparison=f"Your answer provided {len(answer.split())} words; a more detailed answer with specific examples would improve your score.",
+        filler_word_count=filler_count,
+        metrics={
+            "clarity": score >70,
+            "relevance": score >60,
+            "detail_level": min(10, len(answer.split())//10)
+        }
     )
 
 
@@ -258,16 +308,24 @@ class OpenAILLMProvider(LLMProvider):
             history_summary = json.dumps(conversation_history[-8:]) if conversation_history else "[]"
 
             prompt = (
-                f"You are a live technical interviewer for a {target_role} role.\n"
-                f"{RESUME_ONLY_RULES}\n"
-                f"Question type: {agent_type}\n"
-                f"Difficulty: {difficulty} (based on recent scores)\n"
-                f"CANDIDATE RESUME (only source of truth):\n{json.dumps(resume_context, indent=2)}\n"
-                f"Weak areas to probe from session: {json.dumps(weak_areas or [])}\n"
-                f"Recent scores: {json.dumps(recent_scores or [])}\n"
-                f"Conversation so far: {history_summary}\n"
-                'Return JSON: {"question": "your single resume-specific question here"}'
+            f"You are a live technical interviewer for a {target_role} role.\n"
+            f"{RESUME_ONLY_RULES}\n"
+            f"Question type: {agent_type}\n"
+        )
+        if agent_type == "personality":
+            prompt += (
+                "Ask the candidate about their resume: projects they've worked on, their role in those projects,\n"
+                "their professional experience, achievements, teamwork, or challenges they've overcome, using ONLY information from their resume as context.\n"
             )
+        else:
+            prompt += f"Difficulty: {difficulty} (based on recent scores)\n"
+        prompt += (
+            f"CANDIDATE RESUME (only source of truth):\n{json.dumps(resume_context, indent=2)}\n"
+            f"Weak areas to probe from session: {json.dumps(weak_areas or [])}\n"
+            f"Recent scores: {json.dumps(recent_scores or [])}\n"
+            f"Conversation so far: {history_summary}\n"
+            'Return JSON: {"question": "your single resume-specific question here"}'
+        )
 
             response = await client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -302,12 +360,18 @@ class OpenAILLMProvider(LLMProvider):
         try:
             client = _get_openai_client()
             prompt = (
-                f"Evaluate this {agent_type} interview answer.\n"
+                f"Evaluate this {agent_type} interview answer thoroughly.\n"
                 f"Question (resume-based): {question}\n"
                 f"Answer: {answer}\n"
                 f"Resume context for relevance check: {json.dumps(resume_context or {})}\n"
-                "Score how well they answered relative to their claimed resume experience.\n"
-                'Return JSON: {"score": 0-100, "reasoning": "..."}'
+                "Please provide:\n"
+                "1. 'score': a numerical score from 0-100 based on how well they answered relative to their claimed resume experience\n"
+                "2. 'reasoning': a short explanation of the score\n"
+                "3. 'best_answer': an example of a strong, detailed answer to this question\n"
+                "4. 'user_answer_comparison': a comparison of the user's answer to the best answer, highlighting strengths and weaknesses\n"
+                "5. 'filler_word_count': count of filler words (um, uh, er, like, you know, so, sort of, kind of, basically, actually, i mean)\n"
+                "6. 'metrics': a dictionary with 'clarity' (1-10), 'relevance' (1-10), 'detail_level' (1-10)\n"
+                'Return JSON: {"score": 0-100, "reasoning": "...", "best_answer": "...", "user_answer_comparison": "...", "filler_word_count": 0, "metrics": {"clarity": 5, "relevance": 5, "detail_level": 5}}'
             )
             response = await client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -315,9 +379,17 @@ class OpenAILLMProvider(LLMProvider):
                 response_format={"type": "json_object"},
             )
             data = json.loads(response.choices[0].message.content or "{}")
+            # Ensure metrics is a dict
+            metrics = data.get("metrics", {})
+            if not isinstance(metrics, dict):
+                metrics = {"clarity": 5, "relevance": 5, "detail_level":5}
             return LLMEvaluationResult(
                 score=float(data.get("score", 50)),
                 reasoning=data.get("reasoning", "Evaluation completed."),
+                best_answer=data.get("best_answer", "A strong answer would directly address the question with specific examples."),
+                user_answer_comparison=data.get("user_answer_comparison", "Compare your answer to the best answer for improvement ideas."),
+                filler_word_count=int(data.get("filler_word_count", 0)),
+                metrics=metrics,
             )
         except Exception as exc:
             logger.warning("OpenAI evaluation failed, using local fallback: %s", exc)

@@ -5,6 +5,7 @@ from app.agents.audio_analysis_agent import audio_analysis_node
 from app.agents.followup_agent import followup_node
 from app.agents.learning_agent import learning_node
 from app.agents.orchestrator import orchestrator_node
+from app.agents.personality_agent import personality_node
 from app.agents.resume_agent import resume_node
 from app.agents.scenario_agent import scenario_node
 from app.agents.technical_agent import technical_node
@@ -54,6 +55,7 @@ class InterviewGraph:
         graph.add_node("learning", self._bind(learning_node))
 
         graph.add_edge(START, "orchestrator")
+        graph.add_node("personality", self._bind(personality_node))
         graph.add_conditional_edges(
             "orchestrator",
             _route_from_orchestrator,
@@ -61,12 +63,14 @@ class InterviewGraph:
                 "technical": "technical",
                 "followup": "followup",
                 "scenario": "scenario",
+                "personality": "personality",
                 "learning": "learning",
             },
         )
         graph.add_edge("technical", END)
         graph.add_edge("followup", END)
         graph.add_edge("scenario", END)
+        graph.add_edge("personality", END)
         graph.add_edge("learning", END)
         return graph
 
@@ -135,6 +139,7 @@ class InterviewGraph:
             "technical": technical_node,
             "followup": followup_node,
             "scenario": scenario_node,
+            "personality": personality_node,
             "learning": learning_node,
         }
         handler = agent_handlers.get(next_agent, technical_node)
@@ -194,6 +199,10 @@ class InterviewGraph:
             "score": eval_result.score,
             "reasoning": eval_result.reasoning,
             "agent_type": agent_type,
+            "best_answer": eval_result.best_answer,
+            "user_answer_comparison": eval_result.user_answer_comparison,
+            "filler_word_count": eval_result.filler_word_count,
+            "metrics": eval_result.metrics,
         }
 
     async def complete_session(self, session_id: str) -> dict:

@@ -29,8 +29,8 @@ export default function SessionReportPage() {
 
   if (!report) return null;
 
-  const chartData = report.attempts.map((a) => ({
-    name: `Q${report.attempts.indexOf(a) + 1}`,
+  const chartData = report.attempts.map((a, i) => ({
+    name: `Q${i + 1}`,
     score: a.score ?? 0,
   }));
 
@@ -73,16 +73,50 @@ export default function SessionReportPage() {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-6 mb-8">
-        <h2 className="font-semibold mb-4">Q&A Timeline</h2>
-        <div className="space-y-4">
+        <h2 className="font-semibold mb-4">Q&A Timeline with Detailed Feedback</h2>
+        <div className="space-y-6">
           {report.attempts.map((a, i) => (
             <div key={a.attempt_id} className="border-l-2 border-teal-300 pl-4">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-2">
                 <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{a.agent_type}</span>
                 <span className="text-sm font-medium">Q{i + 1}</span>
                 {a.score != null && <span className="text-sm text-teal-700">{a.score.toFixed(0)}%</span>}
               </div>
-              <p className="text-sm text-gray-600">{a.question_text}</p>
+              <p className="text-sm text-gray-800 font-medium mb-2">{a.question_text}</p>
+              
+              {a.answer_text && (
+                <div className="mb-3 p-3 bg-gray-50 rounded-lg">
+                  <p className="text-xs font-semibold text-gray-600 mb-1">Your Answer:</p>
+                  <p className="text-sm text-gray-700">{a.answer_text}</p>
+                </div>
+              )}
+
+              {a.best_answer && (
+                <div className="mb-3 p-3 bg-green-50 rounded-lg">
+                  <p className="text-xs font-semibold text-green-700 mb-1">Best Answer Example:</p>
+                  <p className="text-sm text-gray-700">{a.best_answer}</p>
+                </div>
+              )}
+
+              {a.user_answer_comparison && (
+                <div className="mb-3 p-3 bg-blue-50 rounded-lg">
+                  <p className="text-xs font-semibold text-blue-700 mb-1">Feedback:</p>
+                  <p className="text-sm text-gray-700">{a.user_answer_comparison}</p>
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-4">
+                {a.filler_word_count != null && (
+                  <div className="text-xs text-gray-500">
+                    Filler Words: <span className="font-medium">{a.filler_word_count}</span>
+                  </div>
+                )}
+                {a.metrics && Object.entries(a.metrics).map(([key, value]) => (
+                  <div key={key} className="text-xs text-gray-500">
+                    {key.charAt(0).toUpperCase() + key.slice(1)}: <span className="font-medium">{value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>

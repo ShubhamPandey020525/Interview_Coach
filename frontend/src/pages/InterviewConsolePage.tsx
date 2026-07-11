@@ -20,10 +20,9 @@ import {
   buildSkipSpeech,
 } from '../utils/interviewScript';
 
-type FlowPhase = 'consent' | 'speaking' | 'recording' | 'submitting' | 'thinking' | 'idle';
+type FlowPhase = 'idle' | 'starting' | 'speaking' | 'listening' | 'submitting' | 'thinking' | 'completed';
 
-const SKIP_ANSWER_TEXT =
-  'The candidate did not provide an answer within the allotted time.';
+const SKIP_ANSWER_TEXT = 'The candidate did not provide an answer within the allotted time.';
 
 export default function InterviewConsolePage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -48,153 +47,81 @@ export default function InterviewConsolePage() {
   const audio = useAudioRecorder();
   const { formatted: timerFormatted } = useInterviewTimer(connectionStatus === 'connected');
 
-  const [phase, setPhase] = useState<FlowPhase>('consent');
-  const [consentGiven, setConsentGiven] = useState(false);
-  const [autoStarting, setAutoStarting] = useState(true);
-  const [error, setError] = useState('');
+  const [phase, setPhase] = useState<FlowPhase>('idle');
   const [lines, setLines] = useState<TimelineLine[]>([]);
   const [questionNumber, setQuestionNumber] = useState(0);
+  const [userTranscript, setUserTranscript] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
   const lastAttemptRef = useRef<string | null>(null);
   const lastSpokenAttemptRef = useRef<string | null>(null);
   const lastEvalRef = useRef<string | null>(null);
   const submittingRef = useRef(false);
   const attemptRef = useRef<string | null>(null);
-  const phaseRef = useRef<FlowPhase>('consent');
-  const ttsUnlockedRef = useRef(false);
-  const closingSpokenRef = useRef(false);
-  const questionNumberRef = useRef(0);
+  const phaseRef = useRef<FlowPhase>('idle');
 
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
 
-  // Auto-start: unlock TTS on page load; mic is acquired only when recording starts.
-  useEffect(() => {
-    let cancelled = false;
-    const start = async () => {
-      setAutoStarting(true);
-      primeSpeech();
-      setConsentGiven(true);
-      ttsUnlockedRef.current = true;
-      if (!cancelled) setAutoStarting(false);
-    };
-    void start();
-    return () => {
-      cancelled = true;
-    };
-  }, [sessionId, primeSpeech]);
-
   const addLine = useCallback((line: Omit<TimelineLine, 'id'>) => {
     setLines((prev) => [...prev, { ...line, id: crypto.randomUUID() }]);
   }, []);
 
-  const submitSkipAnswer = useCallback(async () => {
+  // --- Manual control handlers ---
+
+  const handleStartInterview = useCallback(() => {
+    if (phaseRef.current !== 'idle') return;
+    primeSpeech();
+    audio.ensureMicrophoneAccess().catch(() => {});
+    setPhase('starting');
+  }, [primeSpeech, audio]);
+
+  const handleStartRecording = useCallback(() => {
+    if (phaseRef.current !== 'speaking') return;
+    stopSpeaking();
+    audio.startRecording().catch(() => {});
+    setPhase('listening');
+  }, [stopSpeaking, audio]);
+
+  const handleSubmitAnswer = useCallback(async () => {
     const attemptId = attemptRef.current;
-    if (!sessionId || !attemptId || submittingRef.current) return;
+    if (!sessionId || !attemptId || submittingRef.current || phaseRef.current !== 'listening') return;
 
     submittingRef.current = true;
     setPhase('submitting');
-    addLine({ role: 'candidate', text: '(No response — moving on)', meta: 'Skipped' });
 
     try {
-      await submitAnswer(sessionId, attemptId, SKIP_ANSWER_TEXT);
+      const blob = audio.audioBlob;
+      if (blob) {
+        await submitAnswer(sessionId, attemptId, undefined, blob);
+      } else {
+        await submitAnswer(sessionId, attemptId, SKIP_ANSWER_TEXT);
+      }
+      addLine({ role: 'candidate', text: userTranscript || 'Answer submitted', meta: blob ? 'Audio' : 'Text' });
       setPhase('thinking');
       audio.reset();
+      setUserTranscript('');
     } catch (err) {
-      setError(getErrorMessage(err));
-      setPhase('idle');
+      setErrorMessage(getErrorMessage(err));
+      setPhase('listening');
     } finally {
       submittingRef.current = false;
     }
-  }, [sessionId, addLine, audio]);
+  }, [sessionId, userTranscript, audio, addLine]);
 
-  const submitAudioAnswer = useCallback(
-    async (blob: Blob) => {
-      const attemptId = attemptRef.current;
-      if (!sessionId || !attemptId || submittingRef.current) return;
-
-      submittingRef.current = true;
-      setPhase('submitting');
-      addLine({ role: 'candidate', text: 'Voice answer recorded', meta: 'Audio' });
-
+  const handleEndInterview = useCallback(async () => {
+    stopSpeaking();
+    audio.reset();
+    if (sessionId) {
       try {
-        await submitAnswer(sessionId, attemptId, undefined, blob);
-        setPhase('thinking');
-        audio.reset();
-      } catch (err) {
-        setError(getErrorMessage(err));
-        setPhase('idle');
-      } finally {
-        submittingRef.current = false;
-      }
-    },
-    [sessionId, addLine, audio]
-  );
-
-  const startAutoRecording = useCallback(async () => {
-    if (phaseRef.current === 'recording' || phaseRef.current === 'submitting') return;
-
-    try {
-      await audio.startRecording({
-        onComplete: (blob) => {
-          void submitAudioAnswer(blob);
-        },
-        onNoSpeech: () => {
-          audio.releaseMicForSpeech();
-          speak(buildSkipSpeech(), {
-            onEnd: () => {
-              void submitSkipAnswer();
-            },
-            onError: () => {
-              void submitSkipAnswer();
-            },
-          });
-        },
-        onEmptyRecording: () => {
-          void submitSkipAnswer();
-        },
-        noSpeechTimeoutMs: 5000,
-        silenceDurationMs: 2000,
-        silenceThreshold: 10,
-        minDurationMs: 800,
-        maxDurationMs: 120000,
-      });
-      setPhase('recording');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Microphone unavailable');
-      setPhase('idle');
+        await completeSession(sessionId);
+      } catch {}
+      navigate(`/sessions/${sessionId}/report`);
     }
-  }, [audio, submitAudioAnswer, submitSkipAnswer, speak]);
+  }, [stopSpeaking, audio, sessionId, navigate]);
 
-  const speakThenRecord = useCallback(
-    (speechText: string, attemptId: string) => {
-      attemptRef.current = attemptId;
-      setPhase('speaking');
-
-      // Release mic + close AudioContext so TTS is not blocked (Chrome/Windows).
-      audio.releaseMicForSpeech();
-
-      speak(speechText, {
-        onStart: () => {
-          ttsUnlockedRef.current = true;
-          setPhase('speaking');
-        },
-        onEnd: () => {
-          window.setTimeout(() => {
-            void startAutoRecording();
-          }, 500);
-        },
-        onError: () => {
-          window.setTimeout(() => {
-            void startAutoRecording();
-          }, 500);
-        },
-      });
-    },
-    [speak, startAutoRecording, audio]
-  );
-
+  // --- Handle new question ---
   const deliverQuestion = useCallback(
     (attemptId: string, rawText: string, agentType: string, qNum: number) => {
       const displayText = formatQuestionDisplay(rawText);
@@ -206,21 +133,30 @@ export default function InterviewConsolePage() {
         addLine({ role: 'interviewer', text: displayText, meta: agentType });
       }
 
+      attemptRef.current = attemptId;
+
+      // Speak the question
+      audio.releaseMicForSpeech();
       const isLast = qNum >= MAX_QUESTIONS;
       const speechText = buildQuestionSpeech(rawText, qNum, isLast);
-      speakThenRecord(speechText, attemptId);
+
+      speak(speechText, {
+        onStart: () => setPhase('speaking'),
+        onEnd: () => setPhase('idle'), // Wait for user to press start recording
+        onError: () => setPhase('idle'),
+      });
     },
-    [addLine, speakThenRecord]
+    [addLine, speak, audio]
   );
 
-  // Auto-deliver when new question arrives from LLM (after consent).
+  // Auto-deliver when new question arrives from LLM (after consent)
   useEffect(() => {
-    if (!consentGiven || !currentQuestion) return;
+    if (!currentQuestion) return;
     if (currentQuestion.attempt_id === lastSpokenAttemptRef.current) return;
     if (phaseRef.current === 'submitting') return;
 
-    // Stop any in-progress recording before speaking the next question.
-    if (phaseRef.current === 'recording') {
+    // Stop any in-progress recording before speaking the next question
+    if (phaseRef.current === 'listening') {
       audio.releaseMicForSpeech();
     }
 
@@ -232,19 +168,19 @@ export default function InterviewConsolePage() {
       currentQuestion.agent_type,
       questionNumberRef.current
     );
-  }, [currentQuestion, consentGiven, deliverQuestion, audio]);
+  }, [currentQuestion, deliverQuestion, audio]);
 
   useEffect(() => {
     if (!lastEvaluation) return;
     const key = `${lastEvaluation.score}-${lastEvaluation.signals.map((s) => s.notes).join('|')}`;
     if (lastEvalRef.current === key) return;
     lastEvalRef.current = key;
-    setPhase('thinking');
+    setPhase('idle'); // Ready for next question, or completion
   }, [lastEvaluation]);
 
   useEffect(() => {
-    if (!sessionComplete || !sessionId || closingSpokenRef.current) return;
-    closingSpokenRef.current = true;
+    if (!sessionComplete || !sessionId) return;
+    setPhase('completed');
 
     const finish = async () => {
       stopSpeaking();
@@ -253,17 +189,13 @@ export default function InterviewConsolePage() {
         onEnd: async () => {
           try {
             await completeSession(sessionId);
-          } catch {
-            // already completed
-          }
+          } catch {}
           navigate(`/sessions/${sessionId}/report`);
         },
         onError: async () => {
           try {
             await completeSession(sessionId);
-          } catch {
-            // already completed
-          }
+          } catch {}
           navigate(`/sessions/${sessionId}/report`);
         },
       });
@@ -278,16 +210,6 @@ export default function InterviewConsolePage() {
     };
   }, [stopSpeaking, audio]);
 
-  const handleGrantConsent = () => {
-    setError('');
-    primeSpeech();
-    setConsentGiven(true);
-    ttsUnlockedRef.current = true;
-    void audio.ensureMicrophoneAccess().catch(() => {
-      setError('Allow microphone access to continue.');
-    });
-  };
-
   const displayQuestion = currentQuestion
     ? formatQuestionDisplay(currentQuestion.question_text)
     : null;
@@ -295,27 +217,29 @@ export default function InterviewConsolePage() {
   const aiStatus: AiInterviewerStatus =
     phase === 'speaking'
       ? 'speaking'
-      : phase === 'recording' && audio.isRecording
-      ? 'listening'
-      : phase === 'submitting' || phase === 'thinking'
-      ? 'thinking'
-      : 'idle';
+      : phase === 'listening' && audio.isRecording
+        ? 'listening'
+        : phase === 'submitting' || phase === 'thinking'
+          ? 'thinking'
+          : 'idle';
 
   const aiStatusLabel =
     phase === 'speaking'
-      ? 'Asking your question…'
-      : phase === 'recording' && audio.isRecording
-      ? 'Listening — speak your answer'
-      : phase === 'submitting' || phase === 'thinking'
-      ? 'Evaluating…'
-      : phase === 'consent' || autoStarting
-      ? 'Starting interview…'
-      : 'Preparing…';
+      ? 'Asking your question...'
+      : phase === 'listening'
+        ? 'Listening to your answer...'
+        : phase === 'submitting'
+          ? 'Submitting your answer...'
+          : phase === 'thinking'
+            ? 'Evaluating your answer...'
+            : phase === 'starting'
+              ? 'Starting interview...'
+              : 'Ready';
 
   return (
     <div className="interview-focus -mx-6 -mt-8 flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-gradient-to-b from-slate-50 to-teal-50/30 px-3 py-3 md:px-6">
       <div className="mx-auto flex h-full w-full max-w-6xl flex-col overflow-hidden">
-        {/* Header — compact */}
+        {/* Header */}
         <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
           <div className="min-w-0">
             <h1 className="truncate text-base font-bold text-gray-900">AI Voice Interview</h1>
@@ -329,13 +253,13 @@ export default function InterviewConsolePage() {
           </div>
         </div>
 
-        {(error || loadError) && (
+        {(errorMessage || loadError) && (
           <div className="mb-2 shrink-0 rounded border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700">
-            {error || loadError}
+            {errorMessage || loadError}
           </div>
         )}
 
-        {/* Main content — fills remaining height, no page scroll */}
+        {/* Main content */}
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
           {/* Top: Priya + question */}
           <div className="shrink-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -354,13 +278,13 @@ export default function InterviewConsolePage() {
                       <span className="mb-1 inline-block rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-medium capitalize text-teal-800">
                         {currentQuestion!.agent_type}
                       </span>
-                      <p className="line-clamp-3 text-sm leading-snug text-gray-800">{displayQuestion}</p>
+                      <p className="text-sm leading-snug text-gray-800">{displayQuestion}</p>
                     </>
                   ) : (
                     <p className="text-xs text-gray-400">
-                      {connectionStatus === 'connecting' || connectionStatus === 'reconnecting'
-                        ? 'Connecting…'
-                        : 'Waiting for question from AI…'}
+                      {phase === 'starting'
+                        ? 'Starting interview...'
+                        : 'Press "Start Interview" to begin'}
                     </p>
                   )}
                 </div>
@@ -368,38 +292,122 @@ export default function InterviewConsolePage() {
             </div>
           </div>
 
-          {/* Bottom: Voice Answer + Transcript — fills rest */}
-          <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-hidden lg:grid-cols-5">
-            <div className="flex min-h-0 flex-col overflow-hidden lg:col-span-3">
-              <div className="min-h-0 flex-1 overflow-hidden">
-                <AudioOnlyPanel
-                  isRecording={audio.isRecording}
-                  isSpeaking={phase === 'speaking'}
-                  isProcessing={phase === 'submitting' || phase === 'thinking'}
-                  audioLevel={audio.audioLevel}
-                  formattedDuration={audio.formattedDuration}
-                  permissionDenied={audio.permissionDenied}
-                  needsConsent={false}
-                  isStarting={autoStarting}
-                  onGrantConsent={handleGrantConsent}
-                />
+          {/* Middle: Voice Answer + Controls */}
+          <div className="flex min-h-0 flex-1 flex-col gap-2">
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-hidden lg:grid-cols-5">
+              <div className="flex min-h-0 flex-col overflow-hidden lg:col-span-3">
+                <div className="min-h-0 flex-1 overflow-hidden">
+                  <AudioOnlyPanel
+                    isRecording={audio.isRecording}
+                    isSpeaking={phase === 'speaking'}
+                    isProcessing={phase === 'submitting' || phase === 'thinking'}
+                    audioLevel={audio.audioLevel}
+                    formattedDuration={audio.formattedDuration}
+                    permissionDenied={audio.permissionDenied}
+                    needsConsent={false}
+                    isStarting={phase === 'starting'}
+                    onGrantConsent={() => {}}
+                  />
+                </div>
+                {/* Control buttons */}
+                <div className="mt-2 flex shrink-0 gap-2 justify-center">
+                  {phase === 'idle' && !currentQuestion && (
+                    <button
+                      onClick={handleStartInterview}
+                      className="rounded-lg bg-[var(--color-primary)] px-6 py-2 text-sm font-medium text-white hover:opacity-90"
+                    >
+                      Start Interview
+                    </button>
+                  )}
+                  {phase === 'speaking' && (
+                    <>
+                      <button
+                        onClick={handleStartRecording}
+                        className="rounded-lg bg-blue-500 px-6 py-2 text-sm font-medium text-white hover:bg-blue-600"
+                      >
+                        Start Recording Answer
+                      </button>
+                      <button
+                        onClick={() => {
+                          stopSpeaking();
+                          setPhase('idle');
+                        }}
+                        className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        Skip Speaking
+                      </button>
+                    </>
+                  )}
+                  {phase === 'listening' && (
+                    <>
+                      <button
+                        onClick={handleSubmitAnswer}
+                        className="rounded-lg bg-green-500 px-6 py-2 text-sm font-medium text-white hover:bg-green-600"
+                        disabled={submittingRef.current}
+                      >
+                        Submit Answer
+                      </button>
+                      <button
+                        onClick={() => {
+                          audio.stopRecording();
+                          setPhase('idle');
+                        }}
+                        className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  )}
+                  {(phase === 'thinking' || phase === 'idle') && currentQuestion && (
+                    <p className="text-sm text-gray-600">Waiting for next question...</p>
+                  )}
+                </div>
               </div>
-              <button
-                onClick={() => {
-                  stopSpeaking();
-                  audio.reset();
-                  void completeSession(sessionId!).then(() =>
-                    navigate(`/sessions/${sessionId}/report`)
-                  );
-                }}
-                className="mt-2 shrink-0 self-end rounded border border-gray-300 bg-white px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
-              >
-                End Interview
-              </button>
+
+              <div className="min-h-0 overflow-hidden lg:col-span-2">
+                <ConversationTimeline lines={lines} compact />
+              </div>
             </div>
 
-            <div className="min-h-0 overflow-hidden lg:col-span-2">
-              <ConversationTimeline lines={lines} compact />
+            {/* Bottom status bar */}
+            <div className="shrink-0 mt-2 rounded-lg border border-gray-200 bg-white p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {phase === 'speaking' && (
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
+                      <span className="text-sm text-gray-700">AI is speaking...</span>
+                    </div>
+                  )}
+                  {phase === 'listening' && (
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
+                      <span className="text-sm text-gray-700">Listening to your answer...</span>
+                    </div>
+                  )}
+                  {phase === 'submitting' && (
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse" />
+                      <span className="text-sm text-gray-700">Submitting answer...</span>
+                    </div>
+                  )}
+                  {phase === 'thinking' && (
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-yellow-500 animate-pulse" />
+                      <span className="text-sm text-gray-700">Evaluating your answer...</span>
+                    </div>
+                  )}
+                  {phase === 'idle' && !currentQuestion && (
+                    <span className="text-sm text-gray-600">Ready to start!</span>
+                  )}
+                </div>
+                <button
+                  onClick={handleEndInterview}
+                  className="rounded border border-red-300 bg-red-50 px-3 py-1 text-xs text-red-700 hover:bg-red-100"
+                >
+                  End Interview
+                </button>
+              </div>
             </div>
           </div>
         </div>

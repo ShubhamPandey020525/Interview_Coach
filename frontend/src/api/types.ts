@@ -73,7 +73,7 @@ export interface PaginatedResponse<T> {
 
 export interface NextQuestion {
   attempt_id: string;
-  agent_type: 'technical' | 'followup' | 'scenario';
+  agent_type: 'technical' | 'followup' | 'scenario' | 'personality';
   question_text: string;
   sequence_number: number;
 }
@@ -101,6 +101,11 @@ export interface SessionReport {
     question_text: string;
     score: number | null;
     agent_type: string;
+    answer_text: string | null;
+    best_answer: string | null;
+    user_answer_comparison: string | null;
+    filler_word_count: number | null;
+    metrics: Record<string, unknown> | null;
   }>;
   learning_plan: {
     weak_areas: string[];

@@ -75,15 +75,18 @@ export function useSpeechSynthesis() {
         };
 
         const run = async () => {
-          window.speechSynthesis.cancel();
-          await waitMs(200);
+          // Only cancel if not already speaking
+          if (!window.speechSynthesis.speaking) {
+            window.speechSynthesis.cancel();
+            await waitMs(100);
+          }
           window.speechSynthesis.resume();
 
           const utterance = new SpeechSynthesisUtterance(spokenText);
-          utterance.rate = 0.92;
+          utterance.rate = 0.9;
           utterance.pitch = 1;
           utterance.volume = 1;
-          utterance.lang = 'en-IN';
+          utterance.lang = 'en-US';
 
           const voice = pickVoice();
           if (voice) utterance.voice = voice;
@@ -96,27 +99,19 @@ export function useSpeechSynthesis() {
           utterance.onend = () => finish('end');
           utterance.onerror = () => finish('error');
 
-          // Chrome pauses speechSynthesis mid-utterance without this keep-alive.
+          // Keep-alive to prevent Chrome from pausing
           const resumeId = window.setInterval(() => {
-            if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
-              window.speechSynthesis.resume();
-            }
-          }, 250);
+            window.speechSynthesis.resume();
+          }, 100);
           timersRef.current.push(resumeId);
 
-          const estimatedMs = Math.min(120000, Math.max(20000, spokenText.length * 90));
+          // Safety timeout
+          const estimatedMs = Math.min(300000, Math.max(10000, spokenText.length * 150));
           const timeoutId = window.setTimeout(() => finish('end'), estimatedMs);
           timersRef.current.push(timeoutId);
 
           window.speechSynthesis.speak(utterance);
           window.speechSynthesis.resume();
-
-          const notStartedId = window.setTimeout(() => {
-            if (!didStart && !window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
-              finish('error');
-            }
-          }, 4000);
-          timersRef.current.push(notStartedId);
         };
 
         void run();

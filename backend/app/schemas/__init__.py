@@ -155,6 +155,11 @@ class ReportAttemptSummary(BaseModel):
     question_text: str
     score: float | None
     agent_type: str
+    answer_text: str | None
+    best_answer: str | None
+    user_answer_comparison: str | None
+    filler_word_count: int | None
+    metrics: dict | None
 
 
 class LearningPlanSummary(BaseModel):

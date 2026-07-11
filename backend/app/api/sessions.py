@@ -265,6 +265,11 @@ async def process_media_evaluation(
 
         all_scores = [eval_result["score"]] + [s["score"] for s in media_signals]
         attempt.score = sum(all_scores) / len(all_scores)
+        # Save new fields
+        attempt.best_answer = eval_result.get("best_answer")
+        attempt.user_answer_comparison = eval_result.get("user_answer_comparison")
+        attempt.filler_word_count = eval_result.get("filler_word_count")
+        attempt.metrics = eval_result.get("metrics")
         await db.commit()
 
         broadcast_signals = [
@@ -483,6 +488,11 @@ async def submit_answer(
     eval_result = await graph.submit_answer(str(session.id), answer_text or "")
 
     attempt.score = eval_result["score"]
+    # Save new fields
+    attempt.best_answer = eval_result.get("best_answer")
+    attempt.user_answer_comparison = eval_result.get("user_answer_comparison")
+    attempt.filler_word_count = eval_result.get("filler_word_count")
+    attempt.metrics = eval_result.get("metrics")
     signal = EvaluationSignal(
         attempt_id=attempt.id,
         type="technical" if eval_result["agent_type"] in ("technical", "followup") else "communication",
@@ -627,6 +637,11 @@ async def get_report(
                 question_text=a.question_text,
                 score=a.score,
                 agent_type=a.agent_type,
+                answer_text=a.answer_text,
+                best_answer=a.best_answer,
+                user_answer_comparison=a.user_answer_comparison,
+                filler_word_count=a.filler_word_count,
+                metrics=a.metrics,
             )
             for a in attempts
         ],
