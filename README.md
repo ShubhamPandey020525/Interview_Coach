@@ -1,199 +1,157 @@
 # AI Technical Interview Coach
 
-An AI-powered platform for realistic, adaptive mock technical interviews. Candidates upload a resume, go through live interview sessions with dynamic follow-ups, and receive personalized learning plans and progress tracking.
-
-## Architecture
-
-- **Backend:** FastAPI + SQLAlchemy + LangGraph multi-agent orchestration (8 agents)
-- **Frontend:** React 18 + TypeScript + Vite + TanStack Query + Zustand
-- **Database:** SQLite (dev) / PostgreSQL (prod)
-
-## Quick Start
-
-### 1. Start Backend (uvicorn) — run this first
-
-Open a terminal and run **all lines** (Windows PowerShell):
-
-```powershell
-cd backend
-conda activate ai-interview
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-macOS / Linux:
-
-```bash
-cd backend
-conda activate ai-interview
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Backend URLs:
-- API: http://localhost:8000
-- Swagger docs: http://localhost:8000/docs
-- Health check: http://localhost:8000/api/health
-
-Optional — seed demo user (separate terminal, backend running):
-
-```powershell
-cd backend
-conda activate ai-interview
-python -m app.seed
-```
-
-Demo login: `demo@example.com` / `demo12345`
-
-### 2. Start Frontend
-
-Open a **second** terminal:
-
-```powershell
-cd frontend
-npm run dev
-```
-
-App: http://localhost:5173 (or 5174 if 5173 is busy)
+AI se chalne wala platform jisse aap realistic mock technical interviews de sakte ho! Resume upload karo, live interview sessions attend karo, aur personalized learning plans milte rahenge!
 
 ---
 
-### Backend (Conda) — first-time setup only
+## 📋 Pehle ye check kar lo (Prerequisites)
+Project setup karne se pehle ye sab install hona chahiye:
+1. **Python 3.11** (ya usse upar)
+2. **Conda** (ya Miniconda, Python environment manage karne ke liye)
+3. **Node.js 18+** (aur npm, frontend ke liye)
+4. **Git** (GitHub se project clone karne ke liye)
 
+---
+
+## 🚀 Step-by-Step Setup (Pehli baar ke liye)
+
+### 1. GitHub se project clone karo
+Apne system pe ek jagah choose karo (jaise Desktop ya Documents), phir terminal open karke ye command run karo:
+```bash
+git clone https://github.com/ShubhamPandey020525/Interview_Coach.git
+cd Interview_Coach
+```
+
+### 2. Backend Setup
+Terminal open karo, aur `backend` folder me jao:
+
+#### a. Conda environment create karo
 ```bash
 cd backend
-
-# 1. Create conda environment (Python 3.11)
 conda create -n ai-interview python=3.11 -y
-
-# 2. Activate environment
-conda activate ai-interview
-
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 4. Create .env from example
-copy .env.example .env        # Windows
-# cp .env.example .env        # macOS/Linux
-
-# 5. Generate SECRET_KEY and paste into .env
-python -c "import secrets; print(secrets.token_urlsafe(32))"
-
-# 6. (Optional) Seed demo data — run after backend is up
-python -m app.seed
 ```
 
-> **Every day:** use [Start Backend (uvicorn)](#1-start-backend-uvicorn--run-this-first) above — you only need setup once.
+#### b. Environment activate karo
+**Windows PowerShell:**
+```powershell
+conda activate ai-interview
+```
+*(Agar `conda activate` kaam na kare, pehle `conda init powershell` run karke terminal restart karo)*
 
-**Run backend tests:**
-
+**macOS/Linux:**
 ```bash
-cd backend
 conda activate ai-interview
-pytest
 ```
 
-> If `conda activate` fails on Windows, run `conda init powershell`, restart the terminal, then try again.
+#### c. Dependencies install karo
+```bash
+pip install -r requirements.txt
+```
 
-More backend details: [`backend/README.md`](backend/README.md)
+#### d. .env file create karo
+`.env.example` ko copy karke `.env` banao:
+**Windows:**
+```powershell
+copy .env.example .env
+```
+**macOS/Linux:**
+```bash
+cp .env.example .env
+```
 
-### Frontend (npm)
+#### e. SECRET_KEY generate karo
+Ye command run karke ek secret key generate karo, aur usse `.env` file me `SECRET_KEY` ke jagah paste karo:
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
 
-**Prerequisites:** Node.js 18+ and npm installed.
+### 3. Frontend Setup
+Naya terminal open karo, aur `frontend` folder me jao:
 
-**First-time setup** (run once):
-
+#### a. Dependencies install karo
 ```bash
 cd frontend
-
-# 1. Install dependencies
 npm install
-
-# 2. Create .env from example
-copy .env.example .env        # Windows
-# cp .env.example .env        # macOS/Linux
 ```
 
-Default `.env` values (backend must be running on port 8000):
-
-```env
-VITE_API_BASE_URL=http://localhost:8000
-VITE_WS_BASE_URL=ws://localhost:8000
-VITE_SKIP_AUTH=true
+#### b. .env file create karo
+`.env.example` ko copy karke `.env` banao:
+**Windows:**
+```powershell
+copy .env.example .env
+```
+**macOS/Linux:**
+```bash
+cp .env.example .env
 ```
 
-With `VITE_SKIP_AUTH=true`, login/signup is skipped and the app auto-uses the demo account (`demo@example.com`). Run `python -m app.seed` in backend first, or the app will try to register that user automatically.
+---
 
-**Run frontend** (every time):
+## ▶️ Project Chalao (Har baar)
+Do terminals open karo (ek backend ke liye, ek frontend ke liye):
 
+### Terminal 1: Backend Start Karo
+```bash
+cd backend
+conda activate ai-interview
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+- Backend API: http://localhost:8000
+- Swagger Docs (API test karne ke liye): http://localhost:8000/docs
+
+### (Optional) Demo User Seed Karo
+Backend chal raha ho, to naya terminal me ye run karo:
+```bash
+cd backend
+conda activate ai-interview
+python -m app.seed
+```
+Demo login details:
+- Email: `demo@example.com`
+- Password: `demo12345`
+
+### Terminal 2: Frontend Start Karo
 ```bash
 cd frontend
 npm run dev
 ```
+- App: http://localhost:5173 (ya 5174 agar 5173 busy ho)
 
-- App: http://localhost:5173
+---
 
-**Other useful commands:**
-
-```bash
-cd frontend
-npm run build      # production build
-npm run preview    # preview production build
-npm test           # run tests
-```
-
-> Run commands from the `frontend/` folder, not the project root.
-
-More frontend details: [`frontend/README.md`](frontend/README.md)
-
-**Demo account** (after backend seed): `demo@example.com` / `demo12345`
-
-## Agents (8)
-
-| Agent | Responsibility |
-|-------|----------------|
-| Orchestrator | Routes interview flow between specialist agents |
-| Technical | Role/skill-relevant technical questions |
-| Follow-up | Probes deeper on weak answers |
-| Scenario | Open-ended design/behavioral scenarios |
-| Resume | Parses resume to seed skills and context |
-| Learning | Post-session improvement plan |
-| Audio Analysis | Transcription, clarity, pace, confidence |
-| Video Analysis | Engagement, eye contact, posture proxies |
-
-## Troubleshooting
-
+## 🛠️ Troubleshooting (Agar koi problem aaye)
 | Problem | Fix |
 |---------|-----|
-| `Invalid or expired refresh token` | Hard refresh browser (Ctrl+Shift+R) — app auto re-logins in dev mode |
-| `OPTIONS 400` on login | Add your Vite port to `FRONTEND_ORIGINS` in `backend/.env` (e.g. `http://localhost:5174`) |
-| `Backend unreachable` banner | Start backend: `uvicorn app.main:app --reload --host 0.0.0.0 --port 8000` |
-| Shows **Guest** instead of user name | Restart backend after fixing `.env`; refresh browser |
-| `401` on `/api/sessions` | Login failed — check CORS + `SECRET_KEY` (no inline comments in `.env`) |
-| Frontend on port **5174** | Normal when 5173 is busy — backend must allow 5174 in CORS |
+| `Invalid or expired refresh token` | Browser hard refresh karo (Ctrl+Shift+R) |
+| `OPTIONS 400` on login | `backend/.env` me `FRONTEND_ORIGINS` me apna Vite port add karo (jaise `http://localhost:5174`) |
+| `Backend unreachable` banner | Backend start karo: `uvicorn app.main:app --reload --host 0.0.0.0 --port 8000` |
+| Guest dikhaye instead of user name | Backend restart karo `.env` fix karne ke baad, phir browser refresh |
+| `401` on `/api/sessions` | Login fail - CORS aur `SECRET_KEY` check karo (`.env` me inline comments mat rakho) |
+| Frontend port 5174 par chal raha | Normal hai jab 5173 busy ho - backend me 5174 ko CORS me allow karo |
 
-## Project Structure
+---
 
+## 📁 Project Structure
 ```
-ai-interview-coach/
+Interview_Coach/
 ├── backend/     # FastAPI API + agents + tests
 ├── frontend/    # React SPA
 ├── DECISIONS.md # Implementation assumptions
 └── README.md
 ```
 
-## Tests
+---
 
+## 🧪 Tests Chalao
+### Backend Tests
 ```bash
-# Backend (conda env must be active)
 cd backend
 conda activate ai-interview
 pytest
+```
 
-# Frontend
+### Frontend Tests
+```bash
 cd frontend
 npm test
 ```
-
-
-cd backend
-conda activate ai-interview
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
