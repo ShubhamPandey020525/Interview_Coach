@@ -23,10 +23,12 @@ class QuestionAttempt(Base):
     transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
     sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
-    best_answer: Mapped[str | None] = mapped_column(Text, nullable=True)  # New field for example best answer
-    user_answer_comparison: Mapped[str | None] = mapped_column(Text, nullable=True)  # New field for comparison
-    filler_word_count: Mapped[int | None] = mapped_column(Integer, nullable=True)  # New field for filler count
-    metrics: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # New field for metrics dict
+    best_answer: Mapped[str | None] = mapped_column(Text, nullable=True)  # Example best answer
+    user_answer_comparison: Mapped[str | None] = mapped_column(Text, nullable=True)  # Comparison to best answer
+    filler_word_count: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Filler word count
+    metrics: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # Detailed metrics dict
+    factual_inaccuracies: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)  # List of factual inaccuracies
+    weighted_breakdown: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # Weighted score breakdown
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     session: Mapped["InterviewSession"] = relationship(back_populates="attempts")

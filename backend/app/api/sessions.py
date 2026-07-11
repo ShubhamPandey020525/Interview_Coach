@@ -265,11 +265,13 @@ async def process_media_evaluation(
 
         all_scores = [eval_result["score"]] + [s["score"] for s in media_signals]
         attempt.score = sum(all_scores) / len(all_scores)
-        # Save new fields
+        # Save all new evaluation fields
         attempt.best_answer = eval_result.get("best_answer")
         attempt.user_answer_comparison = eval_result.get("user_answer_comparison")
         attempt.filler_word_count = eval_result.get("filler_word_count")
         attempt.metrics = eval_result.get("metrics")
+        attempt.factual_inaccuracies = eval_result.get("factual_inaccuracies")
+        attempt.weighted_breakdown = eval_result.get("weighted_breakdown")
         await db.commit()
 
         broadcast_signals = [
@@ -488,11 +490,13 @@ async def submit_answer(
     eval_result = await graph.submit_answer(str(session.id), answer_text or "")
 
     attempt.score = eval_result["score"]
-    # Save new fields
+    # Save all new evaluation fields
     attempt.best_answer = eval_result.get("best_answer")
     attempt.user_answer_comparison = eval_result.get("user_answer_comparison")
     attempt.filler_word_count = eval_result.get("filler_word_count")
     attempt.metrics = eval_result.get("metrics")
+    attempt.factual_inaccuracies = eval_result.get("factual_inaccuracies")
+    attempt.weighted_breakdown = eval_result.get("weighted_breakdown")
     signal = EvaluationSignal(
         attempt_id=attempt.id,
         type="technical" if eval_result["agent_type"] in ("technical", "followup") else "communication",
@@ -642,6 +646,8 @@ async def get_report(
                 user_answer_comparison=a.user_answer_comparison,
                 filler_word_count=a.filler_word_count,
                 metrics=a.metrics,
+                factual_inaccuracies=a.factual_inaccuracies,
+                weighted_breakdown=a.weighted_breakdown,
             )
             for a in attempts
         ],

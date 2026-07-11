@@ -106,6 +106,8 @@ export interface SessionReport {
     user_answer_comparison: string | null;
     filler_word_count: number | null;
     metrics: Record<string, unknown> | null;
+    factual_inaccuracies: string[] | null;
+    weighted_breakdown: Record<string, unknown> | null;
   }>;
   learning_plan: {
     weak_areas: string[];

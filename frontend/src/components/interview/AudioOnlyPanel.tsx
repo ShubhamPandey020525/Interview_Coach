@@ -8,6 +8,7 @@ interface AudioOnlyPanelProps {
   needsConsent: boolean;
   isStarting?: boolean;
   onGrantConsent: () => void;
+  liveText?: string;
 }
 
 export default function AudioOnlyPanel({
@@ -20,6 +21,7 @@ export default function AudioOnlyPanel({
   needsConsent,
   isStarting = false,
   onGrantConsent,
+  liveText,
 }: AudioOnlyPanelProps) {
   if (needsConsent) {
     return (
@@ -89,6 +91,13 @@ export default function AudioOnlyPanel({
           <span className="text-teal-600">Connecting voice &amp; mic…</span>
         )}
       </div>
+
+      {liveText && (
+        <div className="mt-3 px-3 text-sm text-gray-700">
+          <p className="text-xs text-gray-500 mb-1">Live transcription</p>
+          <div className="truncate rounded bg-white/50 px-2 py-1 text-sm text-gray-800">{liveText}</div>
+        </div>
+      )}
     </div>
   );
 }

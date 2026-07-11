@@ -62,7 +62,6 @@ export function useSpeechSynthesis() {
         clearTimers();
 
         let finished = false;
-        let didStart = false;
 
         const finish = (kind: 'end' | 'error') => {
           if (finished) return;
@@ -92,7 +91,6 @@ export function useSpeechSynthesis() {
           if (voice) utterance.voice = voice;
 
           utterance.onstart = () => {
-            didStart = true;
             speakingRef.current = true;
             callbacks?.onStart?.();
           };

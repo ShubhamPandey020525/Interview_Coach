@@ -5,6 +5,7 @@ import { getErrorMessage } from '../api/client';
 import { completeSession, getSession, submitAnswer } from '../api/sessions';
 import { useInterviewSocket } from '../hooks/useInterviewSocket';
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis';
+import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import { useInterviewTimer } from '../hooks/useInterviewTimer';
 import InterviewerPersona, { type AiInterviewerStatus } from '../components/interview/InterviewerPersona';
@@ -17,7 +18,6 @@ import {
   MAX_QUESTIONS,
   buildClosingSpeech,
   buildQuestionSpeech,
-  buildSkipSpeech,
 } from '../utils/interviewScript';
 
 type FlowPhase = 'idle' | 'starting' | 'speaking' | 'listening' | 'submitting' | 'thinking' | 'completed';
@@ -45,6 +45,7 @@ export default function InterviewConsolePage() {
 
   const { speak, stop: stopSpeaking, prime: primeSpeech } = useSpeechSynthesis();
   const audio = useAudioRecorder();
+  const recognition = useSpeechRecognition();
   const { formatted: timerFormatted } = useInterviewTimer(connectionStatus === 'connected');
 
   const [phase, setPhase] = useState<FlowPhase>('idle');
@@ -59,6 +60,7 @@ export default function InterviewConsolePage() {
   const submittingRef = useRef(false);
   const attemptRef = useRef<string | null>(null);
   const phaseRef = useRef<FlowPhase>('idle');
+  const questionNumberRef = useRef(0);
 
   useEffect(() => {
     phaseRef.current = phase;
@@ -80,7 +82,14 @@ export default function InterviewConsolePage() {
   const handleStartRecording = useCallback(() => {
     if (phaseRef.current !== 'speaking') return;
     stopSpeaking();
+    // Start audio recording and live speech recognition (if supported).
     audio.startRecording().catch(() => {});
+    try {
+      recognition.resetTranscript();
+      recognition.startListening();
+    } catch {
+      // ignore if browser does not support Web Speech API
+    }
     setPhase('listening');
   }, [stopSpeaking, audio]);
 
@@ -93,14 +102,19 @@ export default function InterviewConsolePage() {
 
     try {
       const blob = audio.audioBlob;
+      // include live transcript when available; always send audio blob if present
+      const answerText = recognition.liveText || userTranscript || undefined;
       if (blob) {
-        await submitAnswer(sessionId, attemptId, undefined, blob);
+        await submitAnswer(sessionId, attemptId, answerText, blob);
+      } else if (answerText) {
+        await submitAnswer(sessionId, attemptId, answerText);
       } else {
         await submitAnswer(sessionId, attemptId, SKIP_ANSWER_TEXT);
       }
-      addLine({ role: 'candidate', text: userTranscript || 'Answer submitted', meta: blob ? 'Audio' : 'Text' });
+      addLine({ role: 'candidate', text: recognition.liveText || userTranscript || 'Answer submitted', meta: blob ? 'Audio' : 'Text' });
       setPhase('thinking');
       audio.reset();
+      recognition.stopListening();
       setUserTranscript('');
     } catch (err) {
       setErrorMessage(getErrorMessage(err));
@@ -112,6 +126,9 @@ export default function InterviewConsolePage() {
 
   const handleEndInterview = useCallback(async () => {
     stopSpeaking();
+    try {
+      recognition.stopListening();
+    } catch {}
     audio.reset();
     if (sessionId) {
       try {
@@ -206,6 +223,9 @@ export default function InterviewConsolePage() {
   useEffect(() => {
     return () => {
       stopSpeaking();
+      try {
+        recognition.stopListening();
+      } catch {}
       audio.reset();
     };
   }, [stopSpeaking, audio]);
@@ -307,6 +327,7 @@ export default function InterviewConsolePage() {
                     needsConsent={false}
                     isStarting={phase === 'starting'}
                     onGrantConsent={() => {}}
+                    liveText={recognition.liveText}
                   />
                 </div>
                 {/* Control buttons */}
@@ -350,6 +371,9 @@ export default function InterviewConsolePage() {
                       <button
                         onClick={() => {
                           audio.stopRecording();
+                          try {
+                            recognition.stopListening();
+                          } catch {}
                           setPhase('idle');
                         }}
                         className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"

@@ -160,6 +160,8 @@ class ReportAttemptSummary(BaseModel):
     user_answer_comparison: str | None
     filler_word_count: int | None
     metrics: dict | None
+    factual_inaccuracies: list[str] | None
+    weighted_breakdown: dict | None
 
 
 class LearningPlanSummary(BaseModel):

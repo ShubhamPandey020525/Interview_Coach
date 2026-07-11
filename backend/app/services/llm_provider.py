@@ -36,12 +36,14 @@ STRICT RULES (must follow):
 
 @dataclass
 class LLMEvaluationResult:
-    score: float
+    score: float  # Final weighted score out of 100
     reasoning: str
     best_answer: str
     user_answer_comparison: str
     filler_word_count: int
-    metrics: dict  # Can include things like clarity, confidence, relevance, etc.
+    metrics: dict  # Detailed metrics with sub-scores (0-10 each): clarity, relevance, detail_level, factual_accuracy, confidence
+    factual_inaccuracies: list[str]  # List of factual inaccuracies found in the answer
+    weighted_breakdown: dict  # How each component contributed to the final score (e.g., {"relevance": 30, "clarity": 20, ...})
 
 
 @dataclass
@@ -194,20 +196,82 @@ def _count_filler_words(text: str) -> int:
     return count
 
 
+def _calculate_weighted_score(
+    clarity: float, relevance: float, detail_level: float, factual_accuracy: float, confidence: float, filler_word_count: int, answer_length: int
+) -> tuple[float, dict]:
+    # Weighted scoring formula: out of 100
+    weights = {
+        "relevance": 30,
+        "factual_accuracy": 25,
+        "detail_level": 20,
+        "clarity": 15,
+        "confidence": 10
+    }
+    
+    # Normalize all metrics to 0-10 scale
+    clarity_norm = max(0, min(10, clarity))
+    relevance_norm = max(0, min(10, relevance))
+    detail_norm = max(0, min(10, detail_level))
+    factual_norm = max(0, min(10, factual_accuracy))
+    confidence_norm = max(0, min(10, confidence))
+    
+    # Calculate component scores (each component's contribution is (metric * weight)/10)
+    component_scores = {
+        "relevance": (relevance_norm * weights["relevance"]) / 10,
+        "factual_accuracy": (factual_norm * weights["factual_accuracy"]) / 10,
+        "detail_level": (detail_norm * weights["detail_level"]) / 10,
+        "clarity": (clarity_norm * weights["clarity"]) / 10,
+        "confidence": (confidence_norm * weights["confidence"]) / 10
+    }
+    
+    # Penalty for filler words: subtract 0.5 points per filler word, max penalty 10 points
+    filler_penalty = min(10, filler_word_count * 0.5)
+    
+    # Calculate final score, ensure it's between 0 and 100
+    total_score = sum(component_scores.values()) - filler_penalty
+    final_score = max(0, min(100, total_score))
+    
+    # Prepare breakdown for reporting
+    weighted_breakdown = {
+        **component_scores,
+        "filler_word_penalty": -filler_penalty,
+        "total": final_score,
+        "weights": weights
+    }
+    
+    return final_score, weighted_breakdown
+
+
 def _evaluate_local(question: str, answer: str) -> LLMEvaluationResult:
-    score = min(100.0, max(30.0, len(answer.split()) * 5))
+    # Calculate simple heuristic metrics
+    word_count = len(answer.split())
+    clarity = 5 if word_count > 20 else 3
+    relevance = 6  # Assume some relevance
+    detail_level = min(10, word_count // 10) if word_count > 0 else 0
+    factual_accuracy = 8  # Assume mostly factual for local fallback
+    confidence = 5 if word_count > 10 else 3
     filler_count = _count_filler_words(answer)
+    
+    # Calculate final weighted score
+    final_score, weighted_breakdown = _calculate_weighted_score(
+        clarity, relevance, detail_level, factual_accuracy, confidence, filler_count, word_count
+    )
+    
     return LLMEvaluationResult(
-        score=score,
+        score=final_score,
         reasoning=f"Resume-grounded evaluation: answer length and relevance to '{question[:60]}...'.",
         best_answer=f"A strong answer would directly address the question, use specific examples from experience, and highlight relevant skills.",
-        user_answer_comparison=f"Your answer provided {len(answer.split())} words; a more detailed answer with specific examples would improve your score.",
+        user_answer_comparison=f"Your answer provided {word_count} words; a more detailed answer with specific examples would improve your score.",
         filler_word_count=filler_count,
         metrics={
-            "clarity": score >70,
-            "relevance": score >60,
-            "detail_level": min(10, len(answer.split())//10)
-        }
+            "clarity": clarity,
+            "relevance": relevance,
+            "detail_level": detail_level,
+            "factual_accuracy": factual_accuracy,
+            "confidence": confidence
+        },
+        factual_inaccuracies=[],
+        weighted_breakdown=weighted_breakdown
     )
 
 
@@ -308,24 +372,24 @@ class OpenAILLMProvider(LLMProvider):
             history_summary = json.dumps(conversation_history[-8:]) if conversation_history else "[]"
 
             prompt = (
-            f"You are a live technical interviewer for a {target_role} role.\n"
-            f"{RESUME_ONLY_RULES}\n"
-            f"Question type: {agent_type}\n"
-        )
-        if agent_type == "personality":
-            prompt += (
-                "Ask the candidate about their resume: projects they've worked on, their role in those projects,\n"
-                "their professional experience, achievements, teamwork, or challenges they've overcome, using ONLY information from their resume as context.\n"
+                f"You are a live technical interviewer for a {target_role} role.\n"
+                f"{RESUME_ONLY_RULES}\n"
+                f"Question type: {agent_type}\n"
             )
-        else:
-            prompt += f"Difficulty: {difficulty} (based on recent scores)\n"
-        prompt += (
-            f"CANDIDATE RESUME (only source of truth):\n{json.dumps(resume_context, indent=2)}\n"
-            f"Weak areas to probe from session: {json.dumps(weak_areas or [])}\n"
-            f"Recent scores: {json.dumps(recent_scores or [])}\n"
-            f"Conversation so far: {history_summary}\n"
-            'Return JSON: {"question": "your single resume-specific question here"}'
-        )
+            if agent_type == "personality":
+                prompt += (
+                    "Ask the candidate about their resume: projects they've worked on, their role in those projects,\n"
+                    "their professional experience, achievements, teamwork, or challenges they've overcome, using ONLY information from their resume as context.\n"
+                )
+            else:
+                prompt += f"Difficulty: {difficulty} (based on recent scores)\n"
+            prompt += (
+                f"CANDIDATE RESUME (only source of truth):\n{json.dumps(resume_context, indent=2)}\n"
+                f"Weak areas to probe from session: {json.dumps(weak_areas or [])}\n"
+                f"Recent scores: {json.dumps(recent_scores or [])}\n"
+                f"Conversation so far: {history_summary}\n"
+                'Return JSON: {"question": "your single resume-specific question here"}'
+            )
 
             response = await client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -365,13 +429,13 @@ class OpenAILLMProvider(LLMProvider):
                 f"Answer: {answer}\n"
                 f"Resume context for relevance check: {json.dumps(resume_context or {})}\n"
                 "Please provide:\n"
-                "1. 'score': a numerical score from 0-100 based on how well they answered relative to their claimed resume experience\n"
-                "2. 'reasoning': a short explanation of the score\n"
+                "1. 'metrics': a dictionary with 'clarity' (1-10), 'relevance' (1-10), 'detail_level' (1-10), 'factual_accuracy' (1-10), 'confidence' (1-10)\n"
+                "2. 'reasoning': a short explanation of the evaluation\n"
                 "3. 'best_answer': an example of a strong, detailed answer to this question\n"
                 "4. 'user_answer_comparison': a comparison of the user's answer to the best answer, highlighting strengths and weaknesses\n"
                 "5. 'filler_word_count': count of filler words (um, uh, er, like, you know, so, sort of, kind of, basically, actually, i mean)\n"
-                "6. 'metrics': a dictionary with 'clarity' (1-10), 'relevance' (1-10), 'detail_level' (1-10)\n"
-                'Return JSON: {"score": 0-100, "reasoning": "...", "best_answer": "...", "user_answer_comparison": "...", "filler_word_count": 0, "metrics": {"clarity": 5, "relevance": 5, "detail_level": 5}}'
+                "6. 'factual_inaccuracies': a list of factual inaccuracies found in the answer (empty list if none)\n"
+                'Return JSON: {"metrics": {"clarity": 5, "relevance": 5, "detail_level": 5, "factual_accuracy": 5, "confidence": 5}, "reasoning": "...", "best_answer": "...", "user_answer_comparison": "...", "filler_word_count": 0, "factual_inaccuracies": []}'
             )
             response = await client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -382,14 +446,31 @@ class OpenAILLMProvider(LLMProvider):
             # Ensure metrics is a dict
             metrics = data.get("metrics", {})
             if not isinstance(metrics, dict):
-                metrics = {"clarity": 5, "relevance": 5, "detail_level":5}
+                metrics = {"clarity": 5, "relevance": 5, "detail_level":5, "factual_accuracy":5, "confidence":5}
+            
+            # Extract individual metrics, defaulting to 5
+            clarity = float(metrics.get("clarity", 5))
+            relevance = float(metrics.get("relevance", 5))
+            detail_level = float(metrics.get("detail_level", 5))
+            factual_accuracy = float(metrics.get("factual_accuracy", 5))
+            confidence = float(metrics.get("confidence", 5))
+            filler_count = int(data.get("filler_word_count", 0))
+            factual_inaccuracies = data.get("factual_inaccuracies", [])
+            
+            # Calculate weighted score using our formula
+            final_score, weighted_breakdown = _calculate_weighted_score(
+                clarity, relevance, detail_level, factual_accuracy, confidence, filler_count, len(answer.split())
+            )
+            
             return LLMEvaluationResult(
-                score=float(data.get("score", 50)),
+                score=final_score,
                 reasoning=data.get("reasoning", "Evaluation completed."),
                 best_answer=data.get("best_answer", "A strong answer would directly address the question with specific examples."),
                 user_answer_comparison=data.get("user_answer_comparison", "Compare your answer to the best answer for improvement ideas."),
-                filler_word_count=int(data.get("filler_word_count", 0)),
+                filler_word_count=filler_count,
                 metrics=metrics,
+                factual_inaccuracies=factual_inaccuracies,
+                weighted_breakdown=weighted_breakdown
             )
         except Exception as exc:
             logger.warning("OpenAI evaluation failed, using local fallback: %s", exc)

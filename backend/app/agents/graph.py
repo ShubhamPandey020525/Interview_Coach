@@ -203,6 +203,8 @@ class InterviewGraph:
             "user_answer_comparison": eval_result.user_answer_comparison,
             "filler_word_count": eval_result.filler_word_count,
             "metrics": eval_result.metrics,
+            "factual_inaccuracies": eval_result.factual_inaccuracies,
+            "weighted_breakdown": eval_result.weighted_breakdown,
         }
 
     async def complete_session(self, session_id: str) -> dict:

@@ -105,6 +105,37 @@ export default function SessionReportPage() {
                 </div>
               )}
 
+              {a.factual_inaccuracies && a.factual_inaccuracies.length > 0 && (
+                <div className="mb-3 p-3 bg-red-50 rounded-lg">
+                  <p className="text-xs font-semibold text-red-700 mb-1">Factual Inaccuracies:</p>
+                  <ul className="text-sm text-gray-700 space-y-1">
+                    {a.factual_inaccuracies.map((inaccuracy, idx) => (
+                      <li key={idx}>• {inaccuracy}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {a.weighted_breakdown && (
+                <div className="mb-3 p-3 bg-purple-50 rounded-lg">
+                  <p className="text-xs font-semibold text-purple-700 mb-2">Weighted Score Breakdown:</p>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    {Object.entries(a.weighted_breakdown)
+                      .filter(([key]) => key !== 'total' && key !== 'weights')
+                      .map(([key, value]) => (
+                        <div key={key} className="flex justify-between">
+                          <span className="text-gray-600">
+                            {key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}:
+                          </span>
+                          <span className="font-medium text-gray-800">
+                            {typeof value === 'number' ? value.toFixed(1) : JSON.stringify(value)}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-wrap gap-4">
                 {a.filler_word_count != null && (
                   <div className="text-xs text-gray-500">
@@ -113,7 +144,7 @@ export default function SessionReportPage() {
                 )}
                 {a.metrics && Object.entries(a.metrics).map(([key, value]) => (
                   <div key={key} className="text-xs text-gray-500">
-                    {key.charAt(0).toUpperCase() + key.slice(1)}: <span className="font-medium">{value}</span>
+                    {key.charAt(0).toUpperCase() + key.slice(1)}: <span className="font-medium">{String(value)}</span>
                   </div>
                 ))}
               </div>
