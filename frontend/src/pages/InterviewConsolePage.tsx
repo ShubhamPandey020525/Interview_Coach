@@ -54,6 +54,7 @@ export default function InterviewConsolePage() {
   const [questionNumber, setQuestionNumber] = useState(0);
   const [userTranscript, setUserTranscript] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [isLastQuestionAnswered, setIsLastQuestionAnswered] = useState(false);
 
   const lastAttemptRef = useRef<string | null>(null);
   const lastSpokenAttemptRef = useRef<string | null>(null);
@@ -156,9 +157,17 @@ export default function InterviewConsolePage() {
         await submitAnswer(sessionId, attemptId, SKIP_ANSWER_TEXT);
       }
       addLine({ role: 'candidate', text: answerText || 'Answer submitted', meta: blob ? 'Audio' : 'Text' });
-      setPhase('thinking');
+      
       audio.reset();
       setUserTranscript('');
+
+      if (questionNumberRef.current >= MAX_QUESTIONS) {
+        setPhase('idle');
+        setIsLastQuestionAnswered(true);
+      } else {
+        setPhase('thinking');
+        await requestNextQuestion();
+      }
     } catch (err) {
       setErrorMessage(getErrorMessage(err));
       setPhase('listening');
@@ -166,7 +175,7 @@ export default function InterviewConsolePage() {
       submittingRef.current = false;
       submitPendingRef.current = false;
     }
-  }, [sessionId, addLine, audio]);
+  }, [sessionId, addLine, audio, requestNextQuestion]);
 
   // Effect to wait for audioBlob to be ready if submit was clicked during recording
   useEffect(() => {
@@ -222,6 +231,26 @@ export default function InterviewConsolePage() {
       navigate(`/sessions/${sessionId}/report`);
     }
   }, [stopSpeaking, audio, sessionId, navigate, recognition]);
+
+  const handleGenerateReport = useCallback(async () => {
+    setPhase('completed');
+    stopSpeaking();
+    audio.releaseMicForSpeech();
+    speak(buildClosingSpeech(), {
+      onEnd: async () => {
+        try {
+          await completeSession(sessionId!);
+        } catch {}
+        navigate(`/sessions/${sessionId}/report`);
+      },
+      onError: async () => {
+        try {
+          await completeSession(sessionId!);
+        } catch {}
+        navigate(`/sessions/${sessionId}/report`);
+      },
+    });
+  }, [stopSpeaking, audio, sessionId, navigate, speak]);
 
 
 
@@ -395,7 +424,7 @@ export default function InterviewConsolePage() {
                 </div>
                 {/* Control buttons */}
                 <div className="mt-2 flex shrink-0 gap-2 justify-center">
-                  {phase === 'idle' && (
+                  {phase === 'idle' && !lastSpokenAttemptRef.current && (
                     <button
                       onClick={handleStartInterview}
                       className="rounded-lg bg-[var(--color-primary)] px-6 py-2 text-sm font-medium text-white hover:opacity-90 shadow-sm"
@@ -404,7 +433,7 @@ export default function InterviewConsolePage() {
                     </button>
                   )}
 
-                  {phase === 'idle' && lastEvaluation && !sessionComplete && (
+                  {phase === 'idle' && lastSpokenAttemptRef.current && !sessionComplete && !isLastQuestionAnswered && (
                     <button
                       onClick={async () => {
                         setPhase('thinking');
@@ -413,6 +442,15 @@ export default function InterviewConsolePage() {
                       className="rounded-lg bg-teal-600 px-6 py-2 text-sm font-semibold text-white hover:bg-teal-700 shadow-sm transition-colors duration-150"
                     >
                       Next Question
+                    </button>
+                  )}
+
+                  {phase === 'idle' && isLastQuestionAnswered && !sessionComplete && (
+                    <button
+                      onClick={handleGenerateReport}
+                      className="rounded-lg bg-emerald-600 px-6 py-2 text-sm font-bold text-white hover:bg-emerald-700 shadow-sm transition-all animate-pulse"
+                    >
+                      Generate Report
                     </button>
                   )}
                   

@@ -104,7 +104,7 @@ const MOCK_REPORTS: Record<string, any> = {
         agent_type: 'technical',
         question_text: 'Explain how L1 and L2 regularization differ, and when you would choose one over the other.',
         answer_text: 'L1 adds absolute value penalty and makes weights zero, giving sparse features. L2 adds squared penalty and reduces weights near zero but not exactly zero. Basically I use L1 for feature selection.',
-        best_answer: 'L1 regularization (Lasso) adds a penalty proportional to the absolute values of the weights, causing some weights to become exactly zero (useful for feature selection). L2 regularization (Ridge) adds a penalty proportional to the square of the weights, shrinking weights close to zero but not completely, reducing variance and handling multicollinearity. Choose L1 for sparse models, L2 for general overfitting prevention.',
+        best_answer: 'L1 regularization (Lasso) adds a penalty proportional to the absolute values of the weights, causing some weights to become exactly zero (useful for feature selection). L2 regularization (Ridge) adds a penalty proportional to the square of the weights, shrinking weights close to zero but not completely, reducing variance and overfitting. Choose L1 for sparse models, L2 for general overfitting prevention.',
         user_answer_comparison: 'Correct definition of Lasso and Ridge regularization. You should mention the mathematical basis (L1 uses Manhattan distance, L2 uses Euclidean distance) for a more comprehensive technical answer.',
         factual_inaccuracies: [],
         filler_word_count: 1
@@ -112,6 +112,32 @@ const MOCK_REPORTS: Record<string, any> = {
     ]
   }
 };
+
+function getFallbackBestAnswer(questionText: string, targetRole: string): string {
+  const q = questionText.toLowerCase();
+  
+  if (q.includes('usememo') || q.includes('usecallback')) {
+    return "useMemo is used to cache a calculated value between renders, while useCallback is used to cache a function definition itself. You should use useMemo to avoid expensive re-calculations on every render, and useCallback when passing callbacks to optimized child components to prevent unnecessary re-renders due to referential inequality.";
+  }
+  if (q.includes('profiler') || q.includes('render') || q.includes('slow')) {
+    return "To identify performance issues, use the React DevTools Profiler to record execution time and identify heavy render paths. Common fixes include memoization (React.memo), code splitting with React.lazy for routes, virtualizing long lists (react-window), and lazy-loading non-critical resources.";
+  }
+  if (q.includes('gil') || q.includes('global interpreter lock')) {
+    return "The Global Interpreter Lock (GIL) is a mutex that protects access to Python objects, preventing multiple threads from executing Python bytecodes at once. In CPU-bound code, it restricts true multi-core parallel execution. In I/O-bound asyncio tasks, the GIL is released during wait operations, allowing concurrency without bottlenecking.";
+  }
+  if (q.includes('l1') || q.includes('l2') || q.includes('regularization')) {
+    return "L1 regularization (Lasso) adds the absolute values of the coefficients as a penalty term, driving some weights to exactly zero to yield sparse models (useful for feature selection). L2 regularization (Ridge) adds the squared magnitude of coefficients, shrinking weights close to zero but not completely, reducing variance and overfitting.";
+  }
+  if (q.includes('fastapi') || q.includes('async')) {
+    return "FastAPI uses modern Python type hints and the ASGI standard to provide fast, asynchronous route execution. Use async def for I/O-bound tasks (database queries, network requests) to non-block the event loop, and standard def for CPU-heavy tasks or when using synchronous client drivers.";
+  }
+  if (q.includes('transformer') || q.includes('attention')) {
+    return "Transformers use the self-attention mechanism to process input tokens in parallel, bypassing the sequential bottlenecks of RNNs. The dot-product attention computes compatibility scores between Query (Q), Key (K), and Value (V) matrices, allowing the model to focus on contextually relevant tokens regardless of distance.";
+  }
+
+  // General fallback based on role
+  return `A high-quality response for this ${targetRole || 'Technical'} question should start by defining the core concept clearly, explaining the underlying mechanism or trade-offs involved, and providing a practical example from real-world application layouts.`;
+}
 
 export default function SessionReportPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -276,7 +302,7 @@ function ReportContainer({ report }: { report: any }) {
               <div className="rounded-xl border border-emerald-100 bg-emerald-50/10 p-3.5 flex flex-col gap-2">
                 <span className="text-[9px] font-bold text-emerald-700 uppercase tracking-wider">Recommended Answer Example</span>
                 <p className="text-xs text-slate-800 leading-relaxed min-h-[70px] bg-white border border-emerald-100 rounded-lg p-2.5 whitespace-pre-wrap">
-                  {a.best_answer || 'Suggested answers are not available for this round.'}
+                  {a.best_answer || getFallbackBestAnswer(a.question_text, report.target_role)}
                 </p>
               </div>
             </div>

@@ -175,7 +175,7 @@ async def process_media_evaluation(
     if not attempt:
         return
 
-    answer_text = ""
+    answer_text = attempt.answer_text or ""
     media_signals = []
 
     try:
@@ -183,12 +183,14 @@ async def process_media_evaluation(
             abs_audio = str(StorageService().get_absolute_path(audio_path))
             try:
                 audio_result = await audio_analysis_node(abs_audio)
-                attempt.transcript = audio_result.transcript
-                answer_text = audio_result.transcript
+                if audio_result.transcript:
+                    attempt.transcript = audio_result.transcript
+                    answer_text = audio_result.transcript
                 media_signals.extend(audio_result.signals)
             except Exception as e:
                 logging.getLogger(__name__).error("Audio evaluation failed: %s", e)
-                answer_text = "Candidate provided an audio response."
+                if not answer_text:
+                    answer_text = "Candidate provided an audio response."
 
         if video_path:
             abs_video = str(StorageService().get_absolute_path(video_path))

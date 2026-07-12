@@ -4,9 +4,30 @@ import { listSessions } from '../../api/sessions';
 import { useAuthStore } from '../../store/authStore';
 
 const MOCK_SESSIONS = [
-  { id: 'mock-session-1', target_role: 'React Frontend Developer', created_at: new Date(Date.now() - 86400000).toISOString(), status: 'completed' },
-  { id: 'mock-session-2', target_role: 'Python Backend Engineer', created_at: new Date(Date.now() - 172800000).toISOString(), status: 'completed' },
-  { id: 'mock-session-3', target_role: 'Machine Learning Specialist', created_at: new Date(Date.now() - 259200000).toISOString(), status: 'completed' }
+  {
+    id: 'mock-session-1',
+    user_id: '9cc71b23-2008-49a2-b351-d85bcbb049af',
+    target_role: 'React Frontend Developer',
+    session_name: 'React Developer Round',
+    status: 'completed' as const,
+    created_at: new Date(Date.now() - 86400000).toISOString()
+  },
+  {
+    id: 'mock-session-2',
+    user_id: '9cc71b23-2008-49a2-b351-d85bcbb049af',
+    target_role: 'Python Backend Engineer',
+    session_name: 'Python Backend Engineer Round',
+    status: 'completed' as const,
+    created_at: new Date(Date.now() - 172800000).toISOString()
+  },
+  {
+    id: 'mock-session-3',
+    user_id: '9cc71b23-2008-49a2-b351-d85bcbb049af',
+    target_role: 'Machine Learning Specialist',
+    session_name: 'Machine Learning Specialist Round',
+    status: 'completed' as const,
+    created_at: new Date(Date.now() - 259200000).toISOString()
+  }
 ];
 
 export default function AppLayout() {
