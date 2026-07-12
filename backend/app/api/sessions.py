@@ -350,6 +350,19 @@ async def get_next_question(
     _require_resume_context(resume_context)
     await ensure_graph_session_initialized(session)
 
+    # Check if there is already an active unanswered attempt for this session
+    attempts = [a for a in _in_memory_attempts.values() if a.session_id == session.id]
+    attempts.sort(key=lambda a: a.sequence_number)
+    if attempts:
+        last_attempt = attempts[-1]
+        if not last_attempt.answer_text and not last_attempt.audio_ref and not last_attempt.video_ref:
+            return NextQuestionResponse(
+                attempt_id=last_attempt.id,
+                agent_type=last_attempt.agent_type,
+                question_text=strip_question_metadata(last_attempt.question_text),
+                sequence_number=last_attempt.sequence_number,
+            )
+
     if session.status == "created":
         session.status = "in_progress"
         session.start_time = datetime.utcnow()

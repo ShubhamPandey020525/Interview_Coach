@@ -15,6 +15,7 @@ export function useSpeechRecognition() {
   const [interimTranscript, setInterimTranscript] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
+  const [lang, setLang] = useState('en-IN');
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   useEffect(() => {
@@ -28,7 +29,7 @@ export function useSpeechRecognition() {
     const recognition = new Ctor();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = 'en-IN';
+    recognition.lang = lang;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       let interim = '';
@@ -53,7 +54,7 @@ export function useSpeechRecognition() {
     recognitionRef.current = recognition;
     recognition.start();
     setIsListening(true);
-  }, []);
+  }, [lang]);
 
   const stopListening = useCallback(() => {
     recognitionRef.current?.stop();
@@ -74,6 +75,8 @@ export function useSpeechRecognition() {
     liveText,
     isListening,
     isSupported,
+    lang,
+    setLang,
     startListening,
     stopListening,
     resetTranscript,

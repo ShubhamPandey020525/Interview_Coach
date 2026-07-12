@@ -70,25 +70,63 @@ export default function InterviewConsolePage() {
     phaseRef.current = phase;
   }, [phase]);
 
-  // Sync speech recognition liveText to userTranscript editable state
+  // Sync speech recognition liveText to userTranscript editable state while listening
   useEffect(() => {
-    if (recognition.liveText) {
+    if (phase === 'listening') {
       setUserTranscript(recognition.liveText);
     }
-  }, [recognition.liveText]);
+  }, [recognition.liveText, phase]);
 
   const addLine = useCallback((line: Omit<TimelineLine, 'id'>) => {
     setLines((prev) => [...prev, { ...line, id: crypto.randomUUID() }]);
   }, []);
+
+  // --- Handle new question ---
+  const deliverQuestion = useCallback(
+    (attemptId: string, rawText: string, agentType: string, qNum: number) => {
+      const displayText = formatQuestionDisplay(rawText);
+      const isNewQuestion = attemptId !== lastSpokenAttemptRef.current;
+      lastAttemptRef.current = attemptId;
+
+      if (isNewQuestion) {
+        lastSpokenAttemptRef.current = attemptId;
+        addLine({ role: 'interviewer', text: displayText, meta: agentType });
+      }
+
+      attemptRef.current = attemptId;
+
+      // Speak the question
+      audio.releaseMicForSpeech();
+      const isLast = qNum >= MAX_QUESTIONS;
+      const speechText = buildQuestionSpeech(rawText, qNum, isLast);
+
+      speak(speechText, {
+        onStart: () => setPhase('speaking'),
+        onEnd: () => setPhase('idle'), // Wait for user to press start recording
+        onError: () => setPhase('idle'),
+      });
+    },
+    [addLine, speak, audio]
+  );
 
   // --- Manual control handlers ---
 
   const handleStartInterview = useCallback(() => {
     if (phaseRef.current !== 'idle') return;
     primeSpeech();
-    audio.ensureMicrophoneAccess().catch(() => {});
     setPhase('starting');
-  }, [primeSpeech, audio]);
+
+    if (currentQuestion) {
+      questionNumberRef.current = 1;
+      setQuestionNumber(1);
+      deliverQuestion(
+        currentQuestion.attempt_id,
+        currentQuestion.question_text,
+        currentQuestion.agent_type,
+        1
+      );
+    }
+  }, [primeSpeech, currentQuestion, deliverQuestion]);
 
   const handleStartRecording = useCallback(() => {
     if (phaseRef.current !== 'speaking' && phaseRef.current !== 'idle') return;
@@ -185,39 +223,14 @@ export default function InterviewConsolePage() {
     }
   }, [stopSpeaking, audio, sessionId, navigate, recognition]);
 
-  // --- Handle new question ---
-  const deliverQuestion = useCallback(
-    (attemptId: string, rawText: string, agentType: string, qNum: number) => {
-      const displayText = formatQuestionDisplay(rawText);
-      const isNewQuestion = attemptId !== lastSpokenAttemptRef.current;
-      lastAttemptRef.current = attemptId;
 
-      if (isNewQuestion) {
-        lastSpokenAttemptRef.current = attemptId;
-        addLine({ role: 'interviewer', text: displayText, meta: agentType });
-      }
-
-      attemptRef.current = attemptId;
-
-      // Speak the question
-      audio.releaseMicForSpeech();
-      const isLast = qNum >= MAX_QUESTIONS;
-      const speechText = buildQuestionSpeech(rawText, qNum, isLast);
-
-      speak(speechText, {
-        onStart: () => setPhase('speaking'),
-        onEnd: () => setPhase('idle'), // Wait for user to press start recording
-        onError: () => setPhase('idle'),
-      });
-    },
-    [addLine, speak, audio]
-  );
 
   // Auto-deliver when new question arrives from LLM (after consent)
   useEffect(() => {
     if (!currentQuestion) return;
     if (currentQuestion.attempt_id === lastSpokenAttemptRef.current) return;
     if (phaseRef.current === 'submitting') return;
+    if (phaseRef.current === 'idle') return; // Do not speak automatically if interview has not started
 
     // Stop any in-progress recording before speaking the next question
     if (phaseRef.current === 'listening') {
@@ -376,11 +389,13 @@ export default function InterviewConsolePage() {
                     onGrantConsent={() => {}}
                     userTranscript={userTranscript}
                     onTranscriptChange={setUserTranscript}
+                    speechLang={recognition.lang}
+                    onSpeechLangChange={recognition.setLang}
                   />
                 </div>
                 {/* Control buttons */}
                 <div className="mt-2 flex shrink-0 gap-2 justify-center">
-                  {phase === 'idle' && !currentQuestion && (
+                  {phase === 'idle' && (
                     <button
                       onClick={handleStartInterview}
                       className="rounded-lg bg-[var(--color-primary)] px-6 py-2 text-sm font-medium text-white hover:opacity-90 shadow-sm"

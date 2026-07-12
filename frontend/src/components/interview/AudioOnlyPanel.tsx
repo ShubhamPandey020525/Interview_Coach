@@ -10,6 +10,8 @@ interface AudioOnlyPanelProps {
   onGrantConsent: () => void;
   userTranscript: string;
   onTranscriptChange: (text: string) => void;
+  speechLang: string;
+  onSpeechLangChange: (lang: string) => void;
 }
 
 export default function AudioOnlyPanel({
@@ -24,6 +26,8 @@ export default function AudioOnlyPanel({
   onGrantConsent,
   userTranscript,
   onTranscriptChange,
+  speechLang,
+  onSpeechLangChange,
 }: AudioOnlyPanelProps) {
   if (needsConsent) {
     return (
@@ -71,7 +75,7 @@ export default function AudioOnlyPanel({
         )}
 
         {isRecording && (
-          <div className="flex flex-col items-center animate-fade-in">
+          <div className="flex flex-col items-center animate-fade-in w-full px-4">
             {/* Candidate recording mic */}
             <div className="relative flex items-center justify-center w-24 h-24 rounded-full bg-emerald-50">
               <div className="absolute w-20 h-20 rounded-full bg-emerald-100 animate-ping opacity-75" style={{ animationDuration: '1.5s' }} />
@@ -83,9 +87,31 @@ export default function AudioOnlyPanel({
             <p className="mt-4 text-sm font-semibold text-emerald-700 tracking-wide">
               Taking input...
             </p>
-            <span className="text-[10px] text-red-500 font-mono font-medium animate-pulse mt-0.5">
+            <span className="text-[10px] text-red-500 font-mono font-medium animate-pulse mt-0.5 mb-3">
               Recording • {formattedDuration}
             </span>
+
+            {/* Premium Live transcription display */}
+            <div className="w-full max-w-md rounded-xl border border-emerald-100 bg-emerald-50/50 p-3 shadow-inner backdrop-blur-sm transition-all duration-300">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">
+                  Live Speech Preview
+                </span>
+                <span className="flex h-2 w-2 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+              </div>
+              <p className="text-center text-sm font-medium text-emerald-950 leading-relaxed min-h-[2.5rem] max-h-24 overflow-y-auto px-1 scrollbar-thin">
+                {userTranscript.trim() ? (
+                  userTranscript
+                ) : (
+                  <span className="text-gray-400 italic font-normal animate-pulse">
+                    Start speaking, your words will appear here live...
+                  </span>
+                )}
+              </p>
+            </div>
           </div>
         )}
 
@@ -144,14 +170,29 @@ export default function AudioOnlyPanel({
       )}
 
       {/* Editable live transcription box */}
-      <div className="mt-3 bg-white rounded-lg border border-gray-200 p-2 shadow-sm">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
-            Your Answer (Editable Transcription)
-          </span>
+      <div className="mt-3 bg-white rounded-lg border border-gray-200 p-2.5 shadow-sm">
+        <div className="flex items-center justify-between mb-2 pb-1 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+              Your Answer (Editable Transcription)
+            </span>
+            <div className="flex items-center gap-1">
+              <label htmlFor="speech-lang-select" className="sr-only">Speech Recognition Language</label>
+              <select
+                id="speech-lang-select"
+                value={speechLang}
+                onChange={(e) => onSpeechLangChange(e.target.value)}
+                className="rounded border border-gray-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600 focus:border-teal-500 focus:outline-none transition-colors duration-150 cursor-pointer"
+              >
+                <option value="en-IN">English (India)</option>
+                <option value="hi-IN">Hindi (हिन्दी)</option>
+                <option value="en-US">English (US)</option>
+              </select>
+            </div>
+          </div>
           {isRecording && (
-            <span className="flex items-center gap-1 text-[9px] text-emerald-600 font-medium">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
+            <span className="flex items-center gap-1 text-[9px] text-emerald-600 font-medium animate-pulse">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
               Live Transcribing...
             </span>
           )}

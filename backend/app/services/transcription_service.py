@@ -2,7 +2,6 @@ import re
 from dataclasses import dataclass
 
 from app.config import get_settings
-from app.services.llm_provider import get_llm_provider
 
 settings = get_settings()
 
@@ -25,7 +24,7 @@ class TranscriptionService:
 
         from openai import AsyncOpenAI
 
-        client = AsyncOpenAI(api_key=settings.openai_api_key)
+        client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=15.0)
         with open(audio_path, "rb") as audio_file:
             response = await client.audio.transcriptions.create(
                 model="whisper-1",
