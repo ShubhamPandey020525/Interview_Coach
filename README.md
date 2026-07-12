@@ -1,156 +1,157 @@
 # AI Technical Interview Coach
 
-AI se chalne wala platform jisse aap realistic mock technical interviews de sakte ho! Resume upload karo, live interview sessions attend karo, aur personalized learning plans milte rahenge!
+An AI-powered technical and behavioral mock interview simulator. Upload your resume, configure your target role, participate in realistic voice-interactive practice rounds, and receive personalized learning feedback reports!
 
 ---
 
-## 📋 Pehle ye check kar lo (Prerequisites)
-Project setup karne se pehle ye sab install hona chahiye:
-1. **Python 3.11** (ya usse upar)
-2. **Conda** (ya Miniconda, Python environment manage karne ke liye)
-3. **Node.js 18+** (aur npm, frontend ke liye)
-4. **Git** (GitHub se project clone karne ke liye)
+## 📋 Prerequisites
+Before setting up the project, ensure you have the following installed:
+1. **Python 3.11** (or higher)
+2. **Conda** (or Miniconda, for Python environment management)
+3. **Node.js 18+** (along with npm, for the React frontend)
+4. **Git** (to clone the repository)
 
 ---
 
-## 🚀 Step-by-Step Setup (Pehli baar ke liye)
+## 🚀 Step-by-Step Installation
 
-### 1. GitHub se project clone karo
-Apne system pe ek jagah choose karo (jaise Desktop ya Documents), phir terminal open karke ye command run karo:
+### 1. Clone the Repository
+Select your directory of choice and run the following commands:
 ```bash
 git clone https://github.com/ShubhamPandey020525/Interview_Coach.git
 cd Interview_Coach
 ```
 
 ### 2. Backend Setup
-Terminal open karo, aur `backend` folder me jao:
+Navigate into the `backend` folder:
 
-#### a. Conda environment create karo
+#### a. Create the Conda Environment
 ```bash
 cd backend
 conda create -n ai-interview python=3.11 -y
 ```
 
-#### b. Environment activate karo
+#### b. Activate the Conda Environment
 **Windows PowerShell:**
 ```powershell
 conda activate ai-interview
 ```
-*(Agar `conda activate` kaam na kare, pehle `conda init powershell` run karke terminal restart karo)*
+*(If `conda activate` fails, run `conda init powershell` first, then restart your terminal session.)*
 
-**macOS/Linux:**
+**macOS / Linux:**
 ```bash
 conda activate ai-interview
 ```
 
-#### c. Dependencies install karo
+#### c. Install Python Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-#### d. .env file create karo
-`.env.example` ko copy karke `.env` banao:
+#### d. Create the Environment File
+Copy the example environment configuration:
 **Windows:**
 ```powershell
 copy .env.example .env
 ```
-**macOS/Linux:**
+**macOS / Linux:**
 ```bash
 cp .env.example .env
 ```
 
-#### e. SECRET_KEY generate karo
-Ye command run karke ek secret key generate karo, aur usse `.env` file me `SECRET_KEY` ke jagah paste karo:
+#### e. Generate a Security Secret Key
+Run this helper command, copy the output string, and paste it into the `SECRET_KEY` property in your `backend/.env` file:
 ```bash
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
 ### 3. Frontend Setup
-Naya terminal open karo, aur `frontend` folder me jao:
+Open a new terminal session and navigate into the `frontend` folder:
 
-#### a. Dependencies install karo
+#### a. Install Node Dependencies
 ```bash
 cd frontend
 npm install
 ```
 
-#### b. .env file create karo
-`.env.example` ko copy karke `.env` banao:
+#### b. Create the Environment File
+Copy the example environment configuration:
 **Windows:**
 ```powershell
 copy .env.example .env
 ```
-**macOS/Linux:**
+**macOS / Linux:**
 ```bash
 cp .env.example .env
 ```
 
 ---
 
-## ▶️ Project Chalao (Har baar)
-Do terminals open karo (ek backend ke liye, ek frontend ke liye):
+## ▶️ Execution (Daily Runs)
+Launch the application components in separate terminals:
 
-### Terminal 1: Backend Start Karo
+### Terminal 1: Start the Backend Service
 ```bash
 cd backend
 conda activate ai-interview
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
-- Backend API: http://localhost:8000
-- Swagger Docs (API test karne ke liye): http://localhost:8000/docs
+- **Backend API Endpoint**: http://localhost:8000
+- **Interactive Swagger Documentation**: http://localhost:8000/docs
 
-### (Optional) Demo User Seed Karo
-Backend chal raha ho, to naya terminal me ye run karo:
+### Seed the Demo User Profile (First Run)
+With the backend service running, execute the following script in a new active environment terminal:
 ```bash
 cd backend
 conda activate ai-interview
 python -m app.seed
 ```
-Demo login details:
-- Email: `demo@example.com`
-- Password: `demo12345`
+**Demo Account Credentials:**
+- **Email**: demo@example.com
+- **Password**: demo12345
 
-### Terminal 2: Frontend Start Karo
+### Terminal 2: Start the Frontend Application
 ```bash
 cd frontend
 npm run dev
 ```
-- App: http://localhost:5173 (ya 5174 agar 5173 busy ho)
+- **Vite Web App URL**: http://localhost:5173 (or http://localhost:5174 if 5173 is occupied)
 
 ---
 
-## 🛠️ Troubleshooting (Agar koi problem aaye)
-| Problem | Fix |
-|---------|-----|
-| `Invalid or expired refresh token` | Browser hard refresh karo (Ctrl+Shift+R) |
-| `OPTIONS 400` on login | `backend/.env` me `FRONTEND_ORIGINS` me apna Vite port add karo (jaise `http://localhost:5174`) |
-| `Backend unreachable` banner | Backend start karo: `uvicorn app.main:app --reload --host 0.0.0.0 --port 8000` |
-| Guest dikhaye instead of user name | Backend restart karo `.env` fix karne ke baad, phir browser refresh |
-| `401` on `/api/sessions` | Login fail - CORS aur `SECRET_KEY` check karo (`.env` me inline comments mat rakho) |
-| Frontend port 5174 par chal raha | Normal hai jab 5173 busy ho - backend me 5174 ko CORS me allow karo |
+## 🛠️ Troubleshooting & Support
+
+| Common Issue | Troubleshooting Resolution |
+|:---|:---|
+| `Invalid or expired refresh token` | Perform a browser hard reload (`Ctrl` + `Shift` + `R` or `Cmd` + `Shift` + `R`). |
+| `OPTIONS 400` on authorization | Update the `cors_origins` configurations in `backend/.env` to include your exact Vite local URL port (e.g. `http://localhost:5174`). |
+| `Backend unreachable` status banner | Ensure the FastAPI server is running: `uvicorn app.main:app --reload --host 0.0.0.0 --port 8000`. |
+| Console displays "Guest" name | Check for inline comments in `.env` configurations that might disrupt parser loaders, and restart the backend. |
+| `401 Unauthorized` on `/api/sessions` | Verify CORS origins mapping and make sure `SECRET_KEY` is fully configured in the backend's `.env`. |
 
 ---
 
-## 📁 Project Structure
+## 📁 Repository Structure
 ```
 Interview_Coach/
-├── backend/     # FastAPI API + agents + tests
-├── frontend/    # React SPA
-├── DECISIONS.md # Implementation assumptions
+├── backend/     # FastAPI service, Graph Agents, media storage & unit tests
+├── frontend/    # React SPA dashboard, layout structures & speech hooks
+├── DECISIONS.md # Architectural assumptions and decisions
 └── README.md
 ```
 
 ---
 
-## 🧪 Tests Chalao
-### Backend Tests
+## 🧪 Verification & Tests
+
+### Execute Backend Tests
 ```bash
 cd backend
 conda activate ai-interview
 pytest
 ```
 
-### Frontend Tests
+### Execute Frontend Tests
 ```bash
 cd frontend
 npm test
