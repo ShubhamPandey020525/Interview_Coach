@@ -112,100 +112,104 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto py-4">
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">AI Voice Interview Simulator</h1>
-        <p className="mt-2 text-sm text-gray-600">
-          Upload your resume, enter your target role, and practice high-standard live technical and behavioral interviews with James.
-        </p>
-      </div>
-
-      {error && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          {error}
+    <div className="flex-1 w-full h-full flex flex-col justify-center items-center p-6 bg-slate-50 overflow-hidden">
+      <div className="w-full max-w-xl flex flex-col gap-6">
+        
+        {/* Banner Title */}
+        <div className="text-center">
+          <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight leading-tight">AI Voice Interview Simulator</h1>
+          <p className="mt-1.5 text-xs text-slate-500 max-w-md mx-auto">
+            Upload your resume, input your target role, and practice high-fidelity mock technical interviews with real-time feedback.
+          </p>
         </div>
-      )}
 
-      <div className="bg-white rounded-2xl border-2 border-teal-100 p-6 sm:p-8 shadow-md space-y-8">
-        {/* Step 1: Resume Upload */}
-        <div className="space-y-3">
-          <label className="block text-sm font-semibold text-gray-800">
-            Step 1: Upload &amp; Parse Resume (PDF or DOCX)
-          </label>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <input
-              type="file"
-              accept=".pdf,.docx"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:bg-teal-50 file:text-teal-700 file:font-semibold hover:file:bg-teal-100"
-            />
-            <button
-              onClick={handleUpload}
-              disabled={uploadMutation.isPending}
-              className="rounded-lg bg-teal-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50 shrink-0"
-            >
-              {uploadMutation.isPending ? 'Parsing resume…' : 'Upload & Parse'}
-            </button>
+        {error && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-xs text-red-600 font-medium">
+            {error}
           </div>
+        )}
 
-          {loadingResume ? (
-            <p className="text-xs text-gray-400">Checking resume...</p>
-          ) : (skills.length > 0 || existingResume) ? (
-            <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-4 mt-3">
-              <p className="text-xs font-semibold text-emerald-800 mb-2">Resume parsed successfully!</p>
-              {(skills.length > 0 || existingResume?.skills) && (
-                <div className="flex flex-wrap gap-1.5">
-                  {(skills.length > 0 ? skills : (existingResume?.skills || [])).slice(0, 10).map((s) => (
-                    <span key={s} className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[10px] font-medium">
+        {/* Setup card */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col gap-5">
+          
+          {/* Step 1: Resume Upload */}
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Step 1: Upload Resume (PDF or DOCX)</span>
+            <div className="flex gap-2.5 items-center">
+              <input
+                type="file"
+                accept=".pdf,.docx"
+                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:bg-teal-50 file:text-teal-700 file:font-semibold hover:file:bg-teal-100/80 cursor-pointer"
+              />
+              <button
+                onClick={handleUpload}
+                disabled={uploadMutation.isPending}
+                className="rounded-xl bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 text-xs font-bold transition-all disabled:opacity-50 shrink-0 shadow-md shadow-teal-600/5 active:scale-[0.98]"
+              >
+                {uploadMutation.isPending ? 'Parsing…' : 'Parse'}
+              </button>
+            </div>
+
+            {loadingResume ? (
+              <p className="text-[10px] text-slate-400">Checking existing resume...</p>
+            ) : (skills.length > 0 || existingResume) ? (
+              <div className="rounded-xl bg-emerald-50/50 border border-emerald-100 p-3 mt-1">
+                <p className="text-[10px] font-bold text-emerald-800 flex items-center gap-1 mb-1.5">
+                  <span className="text-emerald-500">✓</span> Resume parsing complete!
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {(skills.length > 0 ? skills : (existingResume?.skills || [])).slice(0, 8).map((s) => (
+                    <span key={s} className="px-2 py-0.5 bg-emerald-100/70 border border-emerald-200/40 text-emerald-800 rounded text-[9px] font-bold">
                       {s}
                     </span>
                   ))}
-                  {(skills.length > 0 ? skills : (existingResume?.skills || [])).length > 10 && (
-                    <span className="text-[10px] text-emerald-700 font-medium self-center ml-1">
-                      +{(skills.length > 0 ? skills : (existingResume?.skills || [])).length - 10} more
+                  {(skills.length > 0 ? skills : (existingResume?.skills || [])).length > 8 && (
+                    <span className="text-[9px] text-emerald-700 font-bold self-center ml-1">
+                      +{(skills.length > 0 ? skills : (existingResume?.skills || [])).length - 8} more
                     </span>
                   )}
                 </div>
-              )}
+              </div>
+            ) : (
+              <p className="text-[10px] text-amber-600 font-semibold mt-1">⚠️ Please upload your resume to generate tailored interview questions.</p>
+            )}
+          </div>
+
+          {/* Step 2: Target Role & Session Name */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Step 2: Target Role</label>
+              <input
+                type="text"
+                value={targetRole}
+                onChange={(e) => setTargetRole(e.target.value)}
+                placeholder="e.g. Frontend Engineer"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/40 px-3.5 py-2.5 text-xs text-slate-700 focus:bg-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none transition-all placeholder:text-slate-400"
+              />
             </div>
-          ) : (
-            <p className="text-xs text-amber-600">No resume uploaded yet. Please upload your resume to generate tailoured questions.</p>
-          )}
-        </div>
 
-        {/* Step 2: Target Role & Session Name */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <label className="block text-sm font-semibold text-gray-800">Step 2: Target Role</label>
-            <input
-              type="text"
-              value={targetRole}
-              onChange={(e) => setTargetRole(e.target.value)}
-              placeholder="e.g. Frontend Engineer, ML Scientist"
-              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Session Name (Optional)</label>
+              <input
+                type="text"
+                value={sessionName}
+                onChange={(e) => setSessionName(e.target.value)}
+                placeholder="e.g. GenAI prep"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/40 px-3.5 py-2.5 text-xs text-slate-700 focus:bg-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none transition-all placeholder:text-slate-400"
+              />
+            </div>
           </div>
 
-          <div className="space-y-1">
-            <label className="block text-sm font-semibold text-gray-800">Session Name (Optional)</label>
-            <input
-              type="text"
-              value={sessionName}
-              onChange={(e) => setSessionName(e.target.value)}
-              placeholder="e.g. GenAI Prep Round"
-              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            />
-          </div>
+          {/* Step 3: Trigger */}
+          <button
+            onClick={handleStart}
+            disabled={createMutation.isPending}
+            className="w-full rounded-xl bg-teal-600 hover:bg-teal-700 py-3 text-sm font-bold text-white shadow-md shadow-teal-600/10 hover:shadow-teal-700/20 transition-all duration-150 transform active:scale-[0.98] disabled:opacity-50 mt-1"
+          >
+            {createMutation.isPending ? 'Starting Interview...' : 'Start AI Interview'}
+          </button>
         </div>
-
-        {/* Step 3: Trigger */}
-        <button
-          onClick={handleStart}
-          disabled={createMutation.isPending}
-          className="w-full rounded-xl bg-teal-600 hover:bg-teal-700 py-3 text-base font-bold text-white shadow-md hover:shadow-lg transition disabled:opacity-50"
-        >
-          {createMutation.isPending ? 'Starting Interview...' : 'Start AI Interview'}
-        </button>
       </div>
     </div>
   );

@@ -2,185 +2,307 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getReport } from '../api/sessions';
 
+const MOCK_REPORTS: Record<string, any> = {
+  'mock-session-1': {
+    session_id: 'mock-session-1',
+    target_role: 'React Frontend Developer',
+    strengths: [
+      'Strong explanation of virtual DOM diffing algorithm and fiber reconciler.',
+      'Appropriate consideration of memory leak prevention using useEffect cleanup functions.',
+      'Good demonstration of state synchronization tradeoffs between Context API and state management tools.'
+    ],
+    weaknesses: [
+      'Could elaborate more on code-splitting via React.lazy and dynamic imports to improve performance.',
+      'Slightly overused filler words like "um" when explaining memoization hooks.'
+    ],
+    learning_plan: {
+      weak_areas: ['React Performance Optimization', 'Web Core Vitals (LCP/FID)'],
+      recommended_resources: [
+        { title: 'React Official Docs: Optimizing Performance', url: 'https://react.dev', type: 'Documentation' },
+        { title: 'Advanced Memoization Patterns in React', url: 'https://react.dev', type: 'Article' }
+      ]
+    },
+    attempts: [
+      {
+        attempt_id: 'mock-att-1-1',
+        sequence_number: 1,
+        agent_type: 'technical',
+        question_text: 'Explain the difference between useMemo and useCallback, and when would you use them?',
+        answer_text: 'Uh, useMemo is used to memorize, like, calculate values. useCallback is for memorizing functions so that we do not rebuild them on every render. Basically, we use them to prevent child rerenders.',
+        best_answer: 'useMemo memoizes the result of a computed calculation, whereas useCallback memoizes the callback function itself. You should use them when passing functions or computed values as dependencies to downstream hooks (like useEffect) or optimized child components wrapped in React.memo.',
+        user_answer_comparison: 'Your definition of both hooks is correct. However, you should emphasize that premature memoization adds overhead, and they are primarily useful to preserve referential equality.',
+        factual_inaccuracies: [],
+        filler_word_count: 3
+      },
+      {
+        attempt_id: 'mock-att-1-2',
+        sequence_number: 2,
+        agent_type: 'scenario',
+        question_text: 'If a React component is rendering extremely slowly, what profiling steps would you take?',
+        answer_text: 'I will open the React DevTools Profiler, record the render times, and look at the flamegraph to see which component takes the longest time to render.',
+        best_answer: 'Start by recording a profile session in React DevTools Profiler. Analyze the flamegraph and ranked charts to spot long render times. Use the "Why did this render" feature to locate prop/state changes. Consider code-splitting routes using React.lazy, lazy loading images, or refactoring heavy state.',
+        user_answer_comparison: 'Excellent explanation of utilizing React DevTools Profiler. Adding detail about common optimization patterns like virtualized lists or state colocation would make this answer outstanding.',
+        factual_inaccuracies: [],
+        filler_word_count: 0
+      }
+    ]
+  },
+  'mock-session-2': {
+    session_id: 'mock-session-2',
+    target_role: 'Python Backend Engineer',
+    strengths: [
+      'Comprehensive understanding of Python concurrency models (asyncio vs threading vs multiprocessing).',
+      'Solid design patterns for database connection pooling and transaction lifecycle handling.'
+    ],
+    weaknesses: [
+      'Did not specify database index selection criteria for heavy read queries.',
+      'Omitted details about cache eviction strategies like LRU/LFU in distributed caching.'
+    ],
+    learning_plan: {
+      weak_areas: ['Database Query Optimization', 'Distributed Cache Eviction Patterns'],
+      recommended_resources: [
+        { title: 'Designing High-Performance Python APIs with FastAPI', url: 'https://fastapi.tiangolo.com', type: 'Course' },
+        { title: 'Redis In-Action: Caching Best Practices', url: 'https://redis.io', type: 'Book' }
+      ]
+    },
+    attempts: [
+      {
+        attempt_id: 'mock-att-2-1',
+        sequence_number: 1,
+        agent_type: 'technical',
+        question_text: 'What is the Global Interpreter Lock (GIL) in Python, and how does it impact asynchronous code?',
+        answer_text: 'The GIL is a lock that allows only one thread to control the Python interpreter. Asyncio doesn\'t run threads in parallel, it uses an event loop, so the GIL does not block asyncio tasks as long as they are I/O bound.',
+        best_answer: 'The GIL ensures only one thread executes Python bytecode at a time, preventing multi-threaded CPU-bound parallelism. For I/O bound code (which asyncio specializes in), execution pauses during socket/disk waits, letting other tasks run. Hence, asyncio works efficiently under the GIL. For CPU-bound tasks, multiprocessing must be used to bypass the GIL.',
+        user_answer_comparison: 'Highly accurate and concise explanation of the event loop under the GIL. Good job emphasizing I/O bound efficiency.',
+        factual_inaccuracies: [],
+        filler_word_count: 0
+      }
+    ]
+  },
+  'mock-session-3': {
+    session_id: 'mock-session-3',
+    target_role: 'Machine Learning Specialist',
+    strengths: [
+      'Deep math understanding of backpropagation, loss functions, and gradient descent variants.',
+      'Clear definition of regularization techniques like L1/L2 and Dropout.'
+    ],
+    weaknesses: [
+      'Needs better coverage of data drift detection and model retraining strategies in production.',
+      'Slightly vague explanation of Transformer self-attention complexity.'
+    ],
+    learning_plan: {
+      weak_areas: ['Model Deployment & Drift Monitoring', 'Transformer Architecture Scaling'],
+      recommended_resources: [
+        { title: 'Machine Learning Engineering in Production', url: 'https://google.com', type: 'Course' },
+        { title: 'Attention Is All You Need Paper Walkthrough', url: 'https://arxiv.org/abs/1706.03762', type: 'Paper' }
+      ]
+    },
+    attempts: [
+      {
+        attempt_id: 'mock-att-3-1',
+        sequence_number: 1,
+        agent_type: 'technical',
+        question_text: 'Explain how L1 and L2 regularization differ, and when you would choose one over the other.',
+        answer_text: 'L1 adds absolute value penalty and makes weights zero, giving sparse features. L2 adds squared penalty and reduces weights near zero but not exactly zero. Basically I use L1 for feature selection.',
+        best_answer: 'L1 regularization (Lasso) adds a penalty proportional to the absolute values of the weights, causing some weights to become exactly zero (useful for feature selection). L2 regularization (Ridge) adds a penalty proportional to the square of the weights, shrinking weights close to zero but not completely, reducing variance and handling multicollinearity. Choose L1 for sparse models, L2 for general overfitting prevention.',
+        user_answer_comparison: 'Correct definition of Lasso and Ridge regularization. You should mention the mathematical basis (L1 uses Manhattan distance, L2 uses Euclidean distance) for a more comprehensive technical answer.',
+        factual_inaccuracies: [],
+        filler_word_count: 1
+      }
+    ]
+  }
+};
+
 export default function SessionReportPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
+  const isMock = sessionId?.startsWith('mock-');
 
-  const { data: report, isLoading, error } = useQuery({
+  // Load real history sessions from backend if running, or use mock fallback
+  const { data: realReport, isLoading, error } = useQuery({
     queryKey: ['report', sessionId],
     queryFn: () => getReport(sessionId!),
     retry: false,
+    enabled: !!sessionId && !isMock,
   });
+
+  if (isMock) {
+    const mockReport = MOCK_REPORTS[sessionId || ''] || MOCK_REPORTS['mock-session-1'];
+    return <ReportContainer report={mockReport} />;
+  }
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="h-20 bg-gray-100 rounded-lg animate-pulse" />
-        ))}
+      <div className="flex-1 h-full flex flex-col justify-center items-center p-8 bg-slate-50">
+        <div className="w-full max-w-2xl space-y-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-20 bg-slate-200/60 rounded-xl animate-pulse" />
+          ))}
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="text-center py-12">
-        <p className="text-gray-600 mb-4">This session is not completed yet.</p>
-        <Link to={`/interview/${sessionId}`} className="text-teal-700 hover:underline">
-          Return to interview
-        </Link>
+      <div className="flex-1 h-full flex flex-col justify-center items-center p-8 bg-slate-50 text-center">
+        <div className="max-w-md bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <p className="text-slate-600 font-medium mb-4">This session is not completed yet.</p>
+          <Link to={`/interview/${sessionId}`} className="inline-block px-4 py-2 bg-teal-600 text-white rounded-xl text-xs font-bold hover:bg-teal-700 shadow-sm transition-all duration-150">
+            Return to interview
+          </Link>
+        </div>
       </div>
     );
   }
 
-  if (!report) return null;
+  if (!realReport) return null;
 
+  return <ReportContainer report={realReport} />;
+}
+
+function ReportContainer({ report }: { report: any }) {
   return (
-    <div className="max-w-5xl mx-auto">
-      {/* Header Panel */}
-      <div className="mb-8 rounded-2xl border border-teal-200 bg-gradient-to-r from-teal-50 to-white p-6">
-        <h1 className="text-2xl font-bold text-gray-900">Interview Evaluation Report</h1>
-        <p className="mt-1 text-gray-600">Review your response transcripts, speech patterns, and ideal answers suggestions below.</p>
-      </div>
+    <div className="flex-1 h-full w-full flex overflow-hidden bg-slate-50 select-none p-6 gap-6 box-border">
+      
+      {/* Left Panel: Summary Score, Strengths, Weaknesses, Recommended steps */}
+      <div className="w-80 h-full flex flex-col gap-4 overflow-y-auto shrink-0 select-none pr-1 scrollbar-thin">
+        
+        {/* Summary Card */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+          <span className="text-[10px] font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded uppercase">Evaluation Report</span>
+          <h2 className="text-base font-extrabold text-slate-800 tracking-tight mt-2 leading-tight">{report.target_role}</h2>
+          <p className="text-[10px] text-slate-500 mt-1">Review metrics, strengths, weaknesses and improvements.</p>
+        </div>
 
-      {/* Strengths & Weaknesses Cards (No Scores/Numbers) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <p className="text-sm font-bold text-emerald-800 uppercase tracking-wider mb-2">Strengths Identified</p>
-          <ul className="text-sm text-gray-700 space-y-1.5">
-            {report.strengths.map((s, i) => (
-              <li key={i} className="flex items-start">
-                <span className="text-emerald-500 mr-2">✓</span>
+        {/* Strengths */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col gap-2">
+          <p className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Strengths Identified</p>
+          <ul className="text-xs text-slate-600 space-y-2">
+            {report.strengths.map((s: string, i: number) => (
+              <li key={i} className="flex items-start gap-1.5 leading-snug">
+                <span className="text-emerald-500 font-bold">✓</span>
                 <span>{s}</span>
               </li>
             ))}
           </ul>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <p className="text-sm font-bold text-amber-800 uppercase tracking-wider mb-2">Recommended Areas to Improve</p>
-          <ul className="text-sm text-gray-700 space-y-1.5">
-            {report.weaknesses.map((w, i) => (
-              <li key={i} className="flex items-start">
-                <span className="text-amber-500 mr-2">•</span>
+
+        {/* Weaknesses */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col gap-2">
+          <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Areas to Improve</p>
+          <ul className="text-xs text-slate-600 space-y-2">
+            {report.weaknesses.map((w: string, i: number) => (
+              <li key={i} className="flex items-start gap-1.5 leading-snug">
+                <span className="text-amber-500 font-bold">•</span>
                 <span>{w}</span>
               </li>
             ))}
           </ul>
         </div>
+
+        {/* Recommended Actions */}
+        {report.learning_plan.weak_areas.length > 0 && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col gap-2.5">
+            <p className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Next Action Steps</p>
+            <div className="flex flex-wrap gap-1">
+              {report.learning_plan.weak_areas.map((area: string) => (
+                <span key={area} className="rounded bg-amber-50 border border-amber-100 px-2 py-0.5 text-[9px] font-bold text-amber-800">
+                  {area}
+                </span>
+              ))}
+            </div>
+            {report.learning_plan.recommended_resources.length > 0 && (
+              <ul className="space-y-1.5 text-[10px] text-slate-500">
+                {report.learning_plan.recommended_resources.slice(0, 2).map((r: any, i: number) => (
+                  <li key={i} className="leading-snug">
+                    <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-teal-600 font-semibold hover:underline">
+                      {r.title}
+                    </a>
+                    <span> ({r.type})</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Q&A Detailed Performance Cards */}
-      <div className="bg-slate-50 rounded-xl border border-gray-200 p-6 mb-8 shadow-sm">
-        <h2 className="font-bold text-lg text-gray-900 mb-6">Detailed Q&A Performance Report</h2>
-        <div className="space-y-8">
-          {report.attempts.map((a, i) => (
-            <div key={a.attempt_id} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow duration-150">
-              {/* Card Header */}
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-3 mb-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-white px-2 py-0.5 rounded bg-teal-600 capitalize">
-                    {a.agent_type} Stage
-                  </span>
-                  <span className="text-sm font-bold text-gray-700">Question {i + 1}</span>
-                </div>
+      {/* Right Panel: Detailed Q&A Scrollable Cards */}
+      <div className="flex-1 h-full overflow-y-auto flex flex-col gap-4 px-1 scrollbar-thin select-text">
+        {report.attempts.map((a: any, i: number) => (
+          <div key={a.attempt_id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex flex-col gap-4">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] font-bold text-white px-2 py-0.5 rounded bg-teal-600 uppercase tracking-wide">
+                  {a.agent_type}
+                </span>
+                <span className="text-xs font-extrabold text-slate-700">Question {i + 1}</span>
               </div>
-
-              {/* Question Text */}
-              <div className="mb-4">
-                <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Interviewer Question</p>
-                <p className="text-sm text-gray-900 font-semibold bg-slate-50 border border-slate-100 rounded-lg p-3 leading-relaxed">
-                  "{a.question_text}"
-                </p>
-              </div>
-              
-              {/* Side-by-Side Comparison */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                {/* User Answer Column */}
-                <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Your Answer</p>
-                    {a.filler_word_count != null && (
-                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                        a.filler_word_count > 0 
-                          ? 'bg-amber-100 text-amber-800' 
-                          : 'bg-emerald-100 text-emerald-800'
-                      }`}>
-                        {a.filler_word_count > 0 
-                          ? `⚠️ ${a.filler_word_count} filler words` 
-                          : '✓ No filler words'}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs leading-relaxed text-gray-700 bg-white border border-slate-100 rounded p-2.5 min-h-[100px] whitespace-pre-wrap">
-                    {a.answer_text || 'No answer provided.'}
-                  </p>
-                </div>
-
-                {/* Best Answer Column */}
-                <div className="rounded-lg border border-emerald-100 bg-emerald-50/20 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wider text-emerald-700 mb-2">Model's Best Answer Example</p>
-                  <p className="text-xs leading-relaxed text-gray-800 bg-white border border-emerald-100 rounded p-2.5 min-h-[100px] whitespace-pre-wrap">
-                    {a.best_answer || 'Ideal answer suggestions are not available for this turn.'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Feedback and Comparison */}
-              {a.user_answer_comparison && (
-                <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50/30 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wider text-blue-700 mb-2">Feedback &amp; Key Differences</p>
-                  <p className="text-xs leading-relaxed text-gray-700 whitespace-pre-wrap">{a.user_answer_comparison}</p>
-                </div>
-              )}
-
-              {/* Factual Inaccuracies */}
-              {a.factual_inaccuracies && a.factual_inaccuracies.length > 0 && (
-                <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50/50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wider text-rose-700 mb-2">⚠️ Factual Inaccuracies Spotted</p>
-                  <ul className="list-disc pl-4 space-y-1">
-                    {a.factual_inaccuracies.map((inaccuracy, idx) => (
-                      <li key={idx} className="text-xs text-rose-950 font-medium">{inaccuracy}</li>
-                    ))}
-                  </ul>
-                </div>
+              {a.filler_word_count != null && (
+                <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                  a.filler_word_count > 0 
+                    ? 'bg-amber-50 border border-amber-150 text-amber-800' 
+                    : 'bg-emerald-50 border border-emerald-150 text-emerald-800'
+                }`}>
+                  {a.filler_word_count > 0 
+                    ? `⚠️ ${a.filler_word_count} filler words` 
+                    : '✓ No filler words'}
+                </span>
               )}
             </div>
-          ))}
-        </div>
-      </div>
 
-      {/* Recommended Resource Links (Bypass unused page routes) */}
-      {report.learning_plan.weak_areas.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-8">
-          <h2 className="font-semibold mb-2">Recommended Next Steps</h2>
-          <div className="mb-4 flex flex-wrap gap-2">
-            {report.learning_plan.weak_areas.map((area) => (
-              <span key={area} className="rounded-full bg-amber-50 px-3 py-1 text-sm text-amber-800">
-                {area}
-              </span>
-            ))}
+            {/* Question Box */}
+            <div className="flex flex-col gap-1 bg-slate-50/50 border border-slate-100 rounded-xl p-3">
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Interviewer Question</span>
+              <p className="text-xs text-slate-800 font-semibold leading-relaxed">
+                "{a.question_text}"
+              </p>
+            </div>
+
+            {/* Split Comparison Columns */}
+            <div className="grid grid-cols-2 gap-4">
+              
+              {/* User Response Column */}
+              <div className="rounded-xl border border-slate-250 bg-slate-50/20 p-3.5 flex flex-col gap-2">
+                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Your Answer</span>
+                <p className="text-xs text-slate-700 leading-relaxed min-h-[70px] bg-white border border-slate-100 rounded-lg p-2.5 whitespace-pre-wrap">
+                  {a.answer_text || 'No response recorded.'}
+                </p>
+              </div>
+
+              {/* Best Answer Example Column */}
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/10 p-3.5 flex flex-col gap-2">
+                <span className="text-[9px] font-bold text-emerald-700 uppercase tracking-wider">Recommended Answer Example</span>
+                <p className="text-xs text-slate-800 leading-relaxed min-h-[70px] bg-white border border-emerald-100 rounded-lg p-2.5 whitespace-pre-wrap">
+                  {a.best_answer || 'Suggested answers are not available for this round.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Differences Feedback */}
+            {a.user_answer_comparison && (
+              <div className="rounded-xl border border-blue-100 bg-blue-50/10 p-3.5 flex flex-col gap-1.5">
+                <span className="text-[9px] font-bold text-blue-700 uppercase tracking-wider">Key differences &amp; feedback</span>
+                <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">{a.user_answer_comparison}</p>
+              </div>
+            )}
+
+            {/* Factual errors */}
+            {a.factual_inaccuracies && a.factual_inaccuracies.length > 0 && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50/10 p-3.5 flex flex-col gap-1.5">
+                <span className="text-[9px] font-bold text-rose-700 uppercase tracking-wider">⚠️ Technical Errors Spotted</span>
+                <ul className="list-disc pl-4 space-y-1">
+                  {a.factual_inaccuracies.map((err: string, idx: number) => (
+                    <li key={idx} className="text-xs text-rose-950 font-medium">{err}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
-          {report.learning_plan.recommended_resources.length > 0 && (
-            <ul className="mb-6 space-y-2 text-sm text-gray-600">
-              {report.learning_plan.recommended_resources.slice(0, 3).map((r, i) => (
-                <li key={i}>
-                  <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-teal-700 hover:underline">
-                    {r.title}
-                  </a>
-                  <span className="text-gray-400"> · {r.type}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="flex gap-3">
-            <Link
-              to="/dashboard"
-              className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700"
-            >
-              Practice Again
-            </Link>
-          </div>
-        </div>
-      )}
+        ))}
+      </div>
     </div>
   );
 }

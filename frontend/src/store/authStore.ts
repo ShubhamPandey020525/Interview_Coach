@@ -30,37 +30,44 @@ export const useAuthStore = create<AuthState>()(
       authReady: !SKIP_AUTH,
 
       login: async (data) => {
-        const res = await apiLogin(data);
+        // Bypass backend login completely
         set({
-          user: res.user,
-          accessToken: res.access_token,
-          refreshToken: res.refresh_token,
+          user: {
+            id: '9cc71b23-2008-49a2-b351-d85bcbb049af',
+            name: 'Demo User',
+            email: data.email || 'demo@example.com',
+            role: 'user',
+            target_role: 'Software Engineer',
+            experience_level: 'junior',
+            is_active: true,
+          },
+          accessToken: 'dummy-token',
+          refreshToken: 'dummy-token',
           isAuthenticated: true,
           authReady: true,
         });
       },
 
       register: async (data) => {
-        const res = await apiRegister(data);
+        // Bypass backend registration completely
         set({
-          user: res.user,
-          accessToken: res.access_token,
-          refreshToken: res.refresh_token,
+          user: {
+            id: '9cc71b23-2008-49a2-b351-d85bcbb049af',
+            name: data.name || 'Demo User',
+            email: data.email || 'demo@example.com',
+            role: 'user',
+            target_role: data.target_role || 'Software Engineer',
+            experience_level: data.experience_level || 'junior',
+            is_active: true,
+          },
+          accessToken: 'dummy-token',
+          refreshToken: 'dummy-token',
           isAuthenticated: true,
           authReady: true,
         });
       },
 
       logout: async () => {
-        if (SKIP_AUTH) return;
-        const refresh = get().refreshToken;
-        if (refresh) {
-          try {
-            await apiLogout(refresh);
-          } catch {
-            // Best effort cleanup.
-          }
-        }
         set({
           user: null,
           accessToken: null,
@@ -70,29 +77,11 @@ export const useAuthStore = create<AuthState>()(
       },
 
       initializeAuth: async () => {
-        if (SKIP_AUTH) {
-          set({
-            user: {
-              id: '9cc71b23-2008-49a2-b351-d85bcbb049af',
-              name: 'Demo User',
-              email: DEMO_EMAIL,
-              role: 'user',
-              target_role: 'Software Engineer',
-              experience_level: 'junior',
-              is_active: true,
-            },
-            accessToken: 'dummy-token',
-            refreshToken: 'dummy-token',
-            isAuthenticated: true,
-            authReady: true,
-          });
-          return;
-        }
+        // Let zustand persist handle rehydration, but always ensure authReady is true
         set({ authReady: true });
       },
 
       reauthenticate: async () => {
-        if (!SKIP_AUTH) return false;
         set({
           user: {
             id: '9cc71b23-2008-49a2-b351-d85bcbb049af',
