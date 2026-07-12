@@ -142,6 +142,8 @@ async def _broadcast_next_question_or_complete(session_id: str) -> None:
         factual_inaccuracies=None,
         weighted_breakdown=None,
         created_at=datetime.utcnow(),
+        topic=result.get("topic"),
+        angle=result.get("angle"),
         evaluation_signals=[]
     )
     _in_memory_attempts[attempt_id] = attempt
@@ -274,6 +276,7 @@ async def process_media_evaluation(
                 "attempt_id": attempt_id,
                 "score": attempt.score,
                 "signals": broadcast_signals,
+                "transcript": attempt.transcript or answer_text,
             },
         },
     )
@@ -493,6 +496,7 @@ async def submit_answer(
                         "notes": signal.notes,
                     }
                 ],
+                "transcript": attempt.transcript or answer_text,
             },
         },
     )

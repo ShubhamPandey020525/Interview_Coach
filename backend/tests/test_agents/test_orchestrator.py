@@ -5,34 +5,34 @@ from app.services.llm_provider import FakeLLMProvider
 
 
 def test_orchestrator_routes_technical_on_start():
-    state = {"current_stage": "technical", "followup_depth": 0, "checkpoint_counter": 0, "question_count": 0}
+    state = {
+        "current_stage": "technical",
+        "followup_depth": 0,
+        "checkpoint_counter": 0,
+        "question_count": 0,
+        "question_sequence": ["concept", "project", "followup", "concept"],
+    }
     assert decide_next_stage(state) == "technical"
 
 
-def test_orchestrator_routes_followup_on_low_score():
+def test_orchestrator_routes_followup_on_sequence():
     state = {
         "current_stage": "technical",
-        "last_answer_scores": {"score": 50},
         "followup_depth": 0,
-        "checkpoint_counter": 1,
-        "question_count": 1,
+        "checkpoint_counter": 2,
+        "question_count": 2,
+        "question_sequence": ["concept", "project", "followup", "concept"],
     }
     assert decide_next_stage(state) == "followup"
 
 
-def test_orchestrator_routes_scenario_at_interval():
-    state = {
-        "current_stage": "technical",
-        "last_answer_scores": {"score": 80},
-        "followup_depth": 0,
-        "checkpoint_counter": 4,
-        "question_count": 4,
-    }
-    assert decide_next_stage(state) == "scenario"
-
-
 def test_orchestrator_routes_learning_on_complete():
-    state = {"current_stage": "complete", "question_count": 8, "max_questions": 8}
+    state = {
+        "current_stage": "complete",
+        "question_count": 4,
+        "max_questions": 4,
+        "question_sequence": ["concept", "project", "followup", "concept"],
+    }
     assert decide_next_stage(state) == "learning"
 
 

@@ -17,4 +17,5 @@ def resume_context_from_profile(profile, raw_text: str = "") -> dict:
         "projects": profile.projects or [],
         "experience_summary": profile.experience_summary or "",
         "raw_text": raw_text[:8000] if raw_text else "",
+        "skill_subtopics": getattr(profile, "skill_subtopics", {}),
     }

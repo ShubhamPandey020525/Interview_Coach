@@ -1,15 +1,10 @@
 
-FOLLOWUP_SCORE_THRESHOLD = 65
-FOLLOWUP_DEPTH_CAP = 2
-SCENARIO_INTERVAL = 4
-MAX_QUESTIONS = 8
+MAX_QUESTIONS = 10
 
 
 def decide_next_stage(state: dict) -> str:
     """Planner logic for the Interview Orchestrator Agent."""
     current_stage = state.get("current_stage", "technical")
-    last_scores = state.get("last_answer_scores")
-    followup_depth = state.get("followup_depth", 0)
     question_count = state.get("question_count", 0)
     max_questions = state.get("max_questions", MAX_QUESTIONS)
 
@@ -19,16 +14,15 @@ def decide_next_stage(state: dict) -> str:
     if current_stage == "learning":
         return "learning"
 
-    # Do followup only if needed, regardless of cycle
-    if last_scores and last_scores.get("score", 100) < FOLLOWUP_SCORE_THRESHOLD and followup_depth < FOLLOWUP_DEPTH_CAP:
+    seq = state.get("question_sequence")
+    if not seq or question_count >= len(seq):
+        return "technical"
+
+    current_type = seq[question_count]
+    if current_type == "followup":
         return "followup"
 
-    # Cycle: 2 technical, 1 personality, repeat
-    cycle_position = question_count % 3
-    if cycle_position == 2:  # 3rd question (index 2)
-        return "personality"
-    else:  # 0 or 1: technical
-        return "technical"
+    return "technical"
 
 
 async def orchestrator_node(state: dict, llm=None) -> dict:

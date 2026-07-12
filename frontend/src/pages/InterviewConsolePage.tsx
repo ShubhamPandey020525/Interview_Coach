@@ -278,7 +278,24 @@ export default function InterviewConsolePage() {
 
   useEffect(() => {
     if (!lastEvaluation) return;
-    const key = `${lastEvaluation.score}-${lastEvaluation.signals.map((s) => s.notes).join('|')}`;
+
+    if (lastEvaluation.transcript) {
+      setLines((prev) => {
+        const nextLines = [...prev];
+        for (let i = nextLines.length - 1; i >= 0; i--) {
+          if (nextLines[i].role === 'candidate') {
+            nextLines[i] = {
+              ...nextLines[i],
+              text: lastEvaluation.transcript
+            };
+            break;
+          }
+        }
+        return nextLines;
+      });
+    }
+
+    const key = `${lastEvaluation.score}-${lastEvaluation.signals.map((s) => s.notes).join('|')}-${lastEvaluation.transcript || ''}`;
     if (lastEvalRef.current === key) return;
     lastEvalRef.current = key;
     setPhase('idle'); // Ready for next question, or completion
@@ -450,12 +467,12 @@ export default function InterviewConsolePage() {
                       onClick={handleGenerateReport}
                       className="rounded-lg bg-emerald-600 px-6 py-2 text-sm font-bold text-white hover:bg-emerald-700 shadow-sm transition-all animate-pulse"
                     >
-                      Generate Report
+                      Finish Interview
                     </button>
                   )}
                   
                   {/* Show recording button if a question is active but we are not recording/submitting/thinking */}
-                  {(phase === 'speaking' || (phase === 'idle' && currentQuestion)) && (
+                  {(phase === 'speaking' || (phase === 'idle' && currentQuestion)) && !isLastQuestionAnswered && (
                     <>
                       <button
                         onClick={handleStartRecording}

@@ -93,6 +93,7 @@ async def upload_resume(
         skills=parsed.get("skills", []),
         projects=parsed.get("projects", []),
         experience_summary=parsed.get("experience_summary", ""),
+        skill_subtopics=parsed.get("skill_subtopics", {}),
         parsed_at=datetime.utcnow(),
         created_at=datetime.utcnow()
     )

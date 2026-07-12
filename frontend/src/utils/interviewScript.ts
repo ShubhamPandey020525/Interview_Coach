@@ -1,6 +1,6 @@
 import { formatQuestionDisplay } from './speechText';
 
-const MAX_QUESTIONS = 8;
+const MAX_QUESTIONS = 10;
 
 export function buildQuestionSpeech(
   rawQuestion: string,

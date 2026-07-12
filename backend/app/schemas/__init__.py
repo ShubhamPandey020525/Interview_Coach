@@ -77,6 +77,7 @@ class ResumeProfileResponse(BaseModel):
     skills: list[str]
     projects: list[dict]
     experience_summary: str | None
+    skill_subtopics: dict[str, list[str]] = Field(default_factory=dict)
     parsed_at: datetime
     created_at: datetime
 
@@ -137,6 +138,8 @@ class AttemptResponse(BaseModel):
     score: float | None
     sequence_number: int
     created_at: datetime
+    topic: str | None = None
+    angle: str | None = None
     evaluation_signals: list[EvaluationSignalResponse] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}

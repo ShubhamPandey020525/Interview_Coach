@@ -7,12 +7,12 @@ type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'reconnect
 interface InterviewState {
   currentAttemptId: string | null;
   currentQuestion: WsQuestionPayload | null;
-  lastEvaluation: { score: number; signals: EvaluationSignal[] } | null;
+  lastEvaluation: { score: number; signals: EvaluationSignal[]; transcript?: string } | null;
   recordingMode: RecordingMode;
   isRecording: boolean;
   connectionStatus: ConnectionStatus;
   setCurrentQuestion: (q: WsQuestionPayload | null) => void;
-  setLastEvaluation: (e: { score: number; signals: EvaluationSignal[] } | null) => void;
+  setLastEvaluation: (e: { score: number; signals: EvaluationSignal[]; transcript?: string } | null) => void;
   setRecordingMode: (mode: RecordingMode) => void;
   setIsRecording: (v: boolean) => void;
   setConnectionStatus: (s: ConnectionStatus) => void;

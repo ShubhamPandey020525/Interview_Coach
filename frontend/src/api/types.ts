@@ -145,4 +145,5 @@ export interface WsEvaluationPayload {
   attempt_id: string;
   score: number;
   signals: EvaluationSignal[];
+  transcript?: string;
 }

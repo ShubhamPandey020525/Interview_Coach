@@ -19,3 +19,4 @@ class InterviewState(TypedDict, total=False):
     pending_evaluation: dict | None
     question_count: int
     max_questions: int
+    question_sequence: list[str]

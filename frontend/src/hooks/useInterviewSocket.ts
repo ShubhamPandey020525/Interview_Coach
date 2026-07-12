@@ -88,7 +88,7 @@ export function useInterviewSocket(sessionId: string) {
         applyQuestion(msg.payload as WsQuestionPayload);
       } else if (msg.type === 'evaluation') {
         const payload = msg.payload as WsEvaluationPayload;
-        setLastEvaluation({ score: payload.score, signals: payload.signals });
+        setLastEvaluation({ score: payload.score, signals: payload.signals, transcript: payload.transcript });
       } else if (msg.type === 'session_complete') {
         setSessionComplete(true);
       }

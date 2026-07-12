@@ -107,6 +107,12 @@ class InterviewGraph:
         target_role: str,
         resume_context: dict | None = None,
     ) -> dict:
+        import random
+        types = ["concept"] * 5 + ["project"] * 2 + ["scenario"] * 2
+        random.shuffle(types)
+        first_project_idx = types.index("project")
+        types.insert(first_project_idx + 1, "followup")
+
         initial: dict = {
             "session_id": session_id,
             "user_id": user_id,
@@ -122,7 +128,8 @@ class InterviewGraph:
             "weak_areas": [],
             "checkpoint_counter": 0,
             "question_count": 0,
-            "max_questions": 8,
+            "max_questions": 10,
+            "question_sequence": types,
         }
         resume_updates = await resume_node(initial, self.llm)
         initial.update(resume_updates)
@@ -161,6 +168,8 @@ class InterviewGraph:
             "question": merged.get("current_question"),
             "agent_type": merged.get("current_stage", "technical"),
             "stage": merged.get("current_stage"),
+            "topic": merged.get("current_topic"),
+            "angle": merged.get("current_angle"),
         }
 
     async def submit_answer(self, session_id: str, answer: str) -> dict:
@@ -212,7 +221,7 @@ class InterviewGraph:
         if not state:
             raise ValueError("Session state not initialized")
 
-        state["question_count"] = state.get("max_questions", 8)
+        state["question_count"] = state.get("max_questions", 10)
         result = await learning_node(state, self.llm)
         merged = {**state, **result}
         await self._persist_state(session_id, merged)

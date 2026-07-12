@@ -1,14 +1,14 @@
+# Utility script to verify that app/agents/graph.py has no syntax/name errors.
+import sys
 
-with open("backend/app/agents/graph.py", "r") as f:
-    content = f.read()
+def verify_graph():
+    try:
+        from app.agents.graph import get_interview_graph
+        print("Success: graph.py compiled and imported successfully without any name errors!")
+        sys.exit(0)
+    except Exception as e:
+        print(f"Error importing graph: {e}", file=sys.stderr)
+        sys.exit(1)
 
-# Replace all occurrences where "technical" is used as a variable (without quotes) in .get() defaults
-content = content.replace('"agent_type": merged.get("current_stage", technical)', '"agent_type": merged.get("current_stage", "technical")')
-content = content.replace('agent_type = state.get("current_stage", technical)', 'agent_type = state.get("current_stage", "technical")')
-content = content.replace('next_agent = route.get("next_agent", technical)', 'next_agent = route.get("next_agent", "technical")')
-content = content.replace('return state.get("next_agent", technical)', 'return state.get("next_agent", "technical")')
-
-with open("backend/app/agents/graph.py", "w") as f:
-    f.write(content)
-
-print("Fixed!")
+if __name__ == "__main__":
+    verify_graph()
