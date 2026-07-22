@@ -76,7 +76,9 @@ export interface NextQuestion {
   agent_type: 'technical' | 'followup' | 'scenario' | 'personality';
   question_text: string;
   sequence_number: number;
+  audio_url?: string | null;
 }
+
 
 export interface EvaluationSignal {
   type: string;
@@ -139,7 +141,9 @@ export interface WsQuestionPayload {
   attempt_id: string;
   agent_type: string;
   question_text: string;
+  audio_url?: string | null;
 }
+
 
 export interface WsEvaluationPayload {
   attempt_id: string;

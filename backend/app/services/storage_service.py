@@ -24,8 +24,9 @@ class StorageService:
         self._ensure_dirs()
 
     def _ensure_dirs(self) -> None:
-        for subdir in ("resumes", "audio", "video"):
+        for subdir in ("resumes", "audio", "video", "tts"):
             (self.media_root / subdir).mkdir(parents=True, exist_ok=True)
+
 
     async def save_resume(self, file: UploadFile) -> str:
         return await self._save_file(file, "resumes", ALLOWED_RESUME_TYPES)

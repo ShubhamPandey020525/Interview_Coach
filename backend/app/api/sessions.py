@@ -29,7 +29,9 @@ from app.agents.video_analysis_agent import video_analysis_node
 from app.agents.resume_context import is_resume_context_sufficient, resume_context_from_profile
 from app.services.resume_parser import extract_text_from_file
 from app.services.storage_service import StorageService
+from app.services.tts_service import TTSService
 from app.utils.question_text import strip_question_metadata
+
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -155,6 +157,10 @@ async def _broadcast_next_question_or_complete(session_id: str) -> None:
             sess.start_time = datetime.utcnow()
         sess.current_stage = result.get("agent_type", "technical")
 
+    clean_q = strip_question_metadata(attempt.question_text)
+    tts = TTSService()
+    audio_url = await tts.generate_question_audio(str(attempt.id), clean_q, attempt.agent_type)
+
     await broadcast_to_session(
         session_id,
         {
@@ -162,10 +168,12 @@ async def _broadcast_next_question_or_complete(session_id: str) -> None:
             "payload": {
                 "attempt_id": str(attempt.id),
                 "agent_type": attempt.agent_type,
-                "question_text": strip_question_metadata(attempt.question_text),
+                "question_text": clean_q,
+                "audio_url": audio_url,
             },
         },
     )
+
 
 async def process_media_evaluation(
     attempt_id: str,
@@ -185,14 +193,18 @@ async def process_media_evaluation(
             abs_audio = str(StorageService().get_absolute_path(audio_path))
             try:
                 audio_result = await audio_analysis_node(abs_audio)
-                if audio_result.transcript:
+                if audio_result.transcript and not audio_result.transcript.startswith("This is a sample transcript"):
                     attempt.transcript = audio_result.transcript
                     answer_text = audio_result.transcript
+                elif attempt.answer_text:
+                    answer_text = attempt.answer_text
+                    attempt.transcript = attempt.answer_text
                 media_signals.extend(audio_result.signals)
             except Exception as e:
                 logging.getLogger(__name__).error("Audio evaluation failed: %s", e)
                 if not answer_text:
                     answer_text = "Candidate provided an audio response."
+
 
         if video_path:
             abs_video = str(StorageService().get_absolute_path(video_path))
@@ -358,14 +370,19 @@ async def get_next_question(
     # Check if there is already an active unanswered attempt for this session
     attempts = [a for a in _in_memory_attempts.values() if a.session_id == session.id]
     attempts.sort(key=lambda a: a.sequence_number)
+    tts = TTSService()
+
     if attempts:
         last_attempt = attempts[-1]
         if not last_attempt.answer_text and not last_attempt.audio_ref and not last_attempt.video_ref:
+            clean_q = strip_question_metadata(last_attempt.question_text)
+            audio_url = await tts.generate_question_audio(str(last_attempt.id), clean_q, last_attempt.agent_type)
             return NextQuestionResponse(
                 attempt_id=last_attempt.id,
                 agent_type=last_attempt.agent_type,
-                question_text=strip_question_metadata(last_attempt.question_text),
+                question_text=clean_q,
                 sequence_number=last_attempt.sequence_number,
+                audio_url=audio_url,
             )
 
     if session.status == "created":
@@ -414,12 +431,17 @@ async def get_next_question(
 
     session.current_stage = result.get("agent_type", "technical")
 
+    clean_q = strip_question_metadata(attempt.question_text)
+    audio_url = await tts.generate_question_audio(str(attempt.id), clean_q, attempt.agent_type)
+
     return NextQuestionResponse(
         attempt_id=attempt.id,
         agent_type=attempt.agent_type,
-        question_text=strip_question_metadata(attempt.question_text),
+        question_text=clean_q,
         sequence_number=attempt.sequence_number,
+        audio_url=audio_url,
     )
+
 
 @router.post("/{session_id}/answer", response_model=AnswerResponse)
 async def submit_answer(

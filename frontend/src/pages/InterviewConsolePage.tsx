@@ -17,7 +17,6 @@ import { formatQuestionDisplay } from '../utils/speechText';
 import {
   MAX_QUESTIONS,
   buildClosingSpeech,
-  buildQuestionSpeech,
 } from '../utils/interviewScript';
 
 type FlowPhase = 'idle' | 'starting' | 'speaking' | 'listening' | 'submitting' | 'thinking' | 'completed';
@@ -66,8 +65,19 @@ export default function InterviewConsolePage() {
 
   const submitPendingRef = useRef(false);
   const pendingAnswerTextRef = useRef('');
+  const audioElementRef = useRef<HTMLAudioElement | null>(null);
+
+  const stopAudioPlayback = useCallback(() => {
+    if (audioElementRef.current) {
+      audioElementRef.current.pause();
+      audioElementRef.current.currentTime = 0;
+      audioElementRef.current = null;
+    }
+    stopSpeaking();
+  }, [stopSpeaking]);
 
   useEffect(() => {
+
     phaseRef.current = phase;
   }, [phase]);
 
@@ -84,7 +94,7 @@ export default function InterviewConsolePage() {
 
   // --- Handle new question ---
   const deliverQuestion = useCallback(
-    (attemptId: string, rawText: string, agentType: string, qNum: number) => {
+    (attemptId: string, rawText: string, agentType: string, _qNum: number, audioUrl?: string | null) => {
       const displayText = formatQuestionDisplay(rawText);
       const isNewQuestion = attemptId !== lastSpokenAttemptRef.current;
       lastAttemptRef.current = attemptId;
@@ -96,18 +106,57 @@ export default function InterviewConsolePage() {
 
       attemptRef.current = attemptId;
 
-      // Speak the question
+      // Stop any existing audio
+      stopAudioPlayback();
       audio.releaseMicForSpeech();
-      const isLast = qNum >= MAX_QUESTIONS;
-      const speechText = buildQuestionSpeech(rawText, qNum, isLast);
 
-      speak(speechText, {
-        onStart: () => setPhase('speaking'),
-        onEnd: () => setPhase('idle'), // Wait for user to press start recording
-        onError: () => setPhase('idle'),
+      const speechText = formatQuestionDisplay(rawText);
+      const targetPath = audioUrl || `/media/tts/${attemptId}.mp3`;
+      const cleanPath = targetPath.startsWith('/') ? targetPath : `/${targetPath}`;
+      const backendOrigin = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+      const fullBackendUrl = `${backendOrigin.replace(/\/$/, '')}${cleanPath}`;
+
+      // Helper for browser Web Speech API fallback
+      const fallbackToSpeech = () => {
+        speak(speechText, {
+          onStart: () => setPhase('speaking'),
+          onEnd: () => setPhase('idle'),
+          onError: () => setPhase('idle'),
+        });
+      };
+
+      // 1. Try relative path via Vite proxy (/media/tts/...)
+      const audioEl = new Audio(cleanPath);
+      audioElementRef.current = audioEl;
+
+      audioEl.onplay = () => setPhase('speaking');
+      audioEl.onended = () => {
+        setPhase('idle');
+        audioElementRef.current = null;
+      };
+      audioEl.onerror = () => {
+        // 2. Try full backend URL if proxy failed
+        const retryEl = new Audio(fullBackendUrl);
+        audioElementRef.current = retryEl;
+        retryEl.onplay = () => setPhase('speaking');
+        retryEl.onended = () => {
+          setPhase('idle');
+          audioElementRef.current = null;
+        };
+        retryEl.onerror = () => {
+          // 3. Fallback to Web Speech API
+          fallbackToSpeech();
+        };
+        retryEl.play().catch(() => fallbackToSpeech());
+      };
+
+      setPhase('speaking');
+      audioEl.play().catch(() => {
+        // Autoplay policy prevented playback, attempt fallback or set idle for button click
+        fallbackToSpeech();
       });
     },
-    [addLine, speak, audio]
+    [addLine, audio, stopAudioPlayback, speak]
   );
 
   // --- Manual control handlers ---
@@ -124,14 +173,27 @@ export default function InterviewConsolePage() {
         currentQuestion.attempt_id,
         currentQuestion.question_text,
         currentQuestion.agent_type,
-        1
+        1,
+        currentQuestion.audio_url
       );
     }
   }, [primeSpeech, currentQuestion, deliverQuestion]);
 
+  const handleReadQuestion = useCallback(() => {
+    if (!currentQuestion) return;
+    deliverQuestion(
+      currentQuestion.attempt_id,
+      currentQuestion.question_text,
+      currentQuestion.agent_type,
+      questionNumberRef.current || 1,
+      currentQuestion.audio_url
+    );
+  }, [currentQuestion, deliverQuestion]);
+
+
   const handleStartRecording = useCallback(() => {
     if (phaseRef.current !== 'speaking' && phaseRef.current !== 'idle') return;
-    stopSpeaking();
+    stopAudioPlayback();
     // Start audio recording and live speech recognition (if supported).
     audio.startRecording().catch(() => {});
     try {
@@ -141,7 +203,8 @@ export default function InterviewConsolePage() {
       // ignore if browser does not support Web Speech API
     }
     setPhase('listening');
-  }, [stopSpeaking, audio, recognition]);
+  }, [stopAudioPlayback, audio, recognition]);
+
 
   const performSubmit = useCallback(async (blob: Blob | null) => {
     const attemptId = attemptRef.current;
@@ -219,7 +282,7 @@ export default function InterviewConsolePage() {
   }, [sessionId, userTranscript, audio, recognition, performSubmit]);
 
   const handleEndInterview = useCallback(async () => {
-    stopSpeaking();
+    stopAudioPlayback();
     try {
       recognition.stopListening();
     } catch {}
@@ -230,11 +293,11 @@ export default function InterviewConsolePage() {
       } catch {}
       navigate(`/sessions/${sessionId}/report`);
     }
-  }, [stopSpeaking, audio, sessionId, navigate, recognition]);
+  }, [stopAudioPlayback, audio, sessionId, navigate, recognition]);
 
   const handleGenerateReport = useCallback(async () => {
     setPhase('completed');
-    stopSpeaking();
+    stopAudioPlayback();
     audio.releaseMicForSpeech();
     speak(buildClosingSpeech(), {
       onEnd: async () => {
@@ -250,7 +313,7 @@ export default function InterviewConsolePage() {
         navigate(`/sessions/${sessionId}/report`);
       },
     });
-  }, [stopSpeaking, audio, sessionId, navigate, speak]);
+  }, [stopAudioPlayback, audio, sessionId, navigate, speak]);
 
 
 
@@ -272,7 +335,8 @@ export default function InterviewConsolePage() {
       currentQuestion.attempt_id,
       currentQuestion.question_text,
       currentQuestion.agent_type,
-      questionNumberRef.current
+      questionNumberRef.current,
+      currentQuestion.audio_url
     );
   }, [currentQuestion, deliverQuestion, audio]);
 
@@ -286,7 +350,8 @@ export default function InterviewConsolePage() {
           if (nextLines[i].role === 'candidate') {
             nextLines[i] = {
               ...nextLines[i],
-              text: lastEvaluation.transcript
+              text: lastEvaluation.transcript || 'No speech captured.'
+
             };
             break;
           }
@@ -306,7 +371,7 @@ export default function InterviewConsolePage() {
     setPhase('completed');
 
     const finish = async () => {
-      stopSpeaking();
+      stopAudioPlayback();
       audio.releaseMicForSpeech();
       speak(buildClosingSpeech(), {
         onEnd: async () => {
@@ -324,17 +389,18 @@ export default function InterviewConsolePage() {
       });
     };
     finish();
-  }, [sessionComplete, navigate, sessionId, stopSpeaking, audio, speak]);
+  }, [sessionComplete, navigate, sessionId, stopAudioPlayback, audio, speak]);
 
   useEffect(() => {
     return () => {
-      stopSpeaking();
+      stopAudioPlayback();
       try {
         recognition.stopListening();
       } catch {}
       audio.reset();
     };
-  }, [stopSpeaking, audio, recognition]);
+  }, [stopAudioPlayback, audio, recognition]);
+
 
   const displayQuestion = currentQuestion
     ? formatQuestionDisplay(currentQuestion.question_text)
@@ -363,32 +429,32 @@ export default function InterviewConsolePage() {
               : 'Ready';
 
   return (
-    <div className="interview-focus -mx-6 -mt-8 flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-gradient-to-b from-slate-50 to-teal-50/30 px-3 py-3 md:px-6">
+    <div className="interview-focus flex-1 w-full h-full flex flex-col overflow-hidden bg-gradient-to-b from-slate-50 via-teal-50/20 to-slate-50 text-slate-800 p-4 md:p-6 box-border">
       <div className="mx-auto flex h-full w-full max-w-6xl flex-col overflow-hidden">
         {/* Header */}
         <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
           <div className="min-w-0">
-            <h1 className="truncate text-base font-bold text-gray-900">AI Voice Interview</h1>
-            <p className="truncate text-xs text-gray-600">{session?.target_role || 'Interview'}</p>
+            <h1 className="truncate text-base font-extrabold text-slate-900 tracking-tight">AI Voice Interview Studio</h1>
+            <p className="truncate text-xs text-teal-700 font-bold">{session?.target_role || 'Mock Interview'}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <span className="rounded bg-white px-2 py-1 font-mono text-xs text-gray-700 shadow-sm">
-              {timerFormatted}
+            <span className="rounded-xl border border-slate-200 bg-white px-3 py-1 font-mono text-xs font-bold text-teal-800 shadow-xs">
+              ⏱️ {timerFormatted}
             </span>
             <ConnectionStatusBadge status={connectionStatus} onReconnect={reconnectNow} />
           </div>
         </div>
 
         {(errorMessage || loadError) && (
-          <div className="mb-2 shrink-0 rounded border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700">
-            {errorMessage || loadError}
+          <div className="mb-2 shrink-0 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700 font-semibold shadow-xs">
+            ⚠️ {errorMessage || loadError}
           </div>
         )}
 
         {/* Main content */}
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
-          {/* Top: Priya + question */}
-          <div className="shrink-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          {/* Top: Persona + question */}
+          <div className="shrink-0 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-xl shadow-slate-200/50 backdrop-blur-md">
             <div className="flex gap-4">
               <div className="shrink-0">
                 <InterviewerPersona status={aiStatus} statusLabel={aiStatusLabel} compact />
@@ -398,18 +464,30 @@ export default function InterviewConsolePage() {
                   currentStage={currentQuestion?.agent_type || null}
                   questionNumber={questionNumber}
                 />
-                <div className="mt-3 rounded-lg bg-slate-50 p-3">
+                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 shadow-inner">
                   {displayQuestion ? (
                     <>
-                      <span className="mb-1 inline-block rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-medium capitalize text-teal-800">
-                        {currentQuestion!.agent_type}
-                      </span>
-                      <p className="text-sm leading-snug text-gray-800">{displayQuestion}</p>
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <span className="inline-block rounded-full bg-teal-100 border border-teal-300 px-2.5 py-0.5 text-[10px] font-bold capitalize text-teal-900">
+                          {currentQuestion!.agent_type}
+                        </span>
+                        <button
+                          onClick={handleReadQuestion}
+                          className="flex items-center gap-1.5 rounded-full border border-teal-300 bg-teal-50 hover:bg-teal-100 px-3 py-1 text-xs font-extrabold text-teal-800 shadow-xs transition-all active:scale-95 cursor-pointer"
+                          title="Click to play/replay question audio"
+                        >
+                          <svg className="w-4 h-4 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                          </svg>
+                          <span>{phase === 'speaking' ? 'Playing Audio...' : 'Listen Question 🔊'}</span>
+                        </button>
+                      </div>
+                      <p className="text-sm font-medium leading-relaxed text-slate-800">{displayQuestion}</p>
                     </>
                   ) : (
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-slate-400">
                       {phase === 'starting'
-                        ? 'Starting interview...'
+                        ? 'Starting interview studio...'
                         : 'Press "Start Interview" to begin'}
                     </p>
                   )}
@@ -422,7 +500,7 @@ export default function InterviewConsolePage() {
           <div className="flex min-h-0 flex-1 flex-col gap-2">
             <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-hidden lg:grid-cols-5">
               <div className="flex min-h-0 flex-col overflow-hidden lg:col-span-3">
-                <div className="min-h-0 flex-1 overflow-hidden">
+                <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xl shadow-slate-200/50">
                   <AudioOnlyPanel
                     isRecording={audio.isRecording}
                     isSpeaking={phase === 'speaking'}
@@ -444,7 +522,7 @@ export default function InterviewConsolePage() {
                   {phase === 'idle' && !lastSpokenAttemptRef.current && (
                     <button
                       onClick={handleStartInterview}
-                      className="rounded-lg bg-[var(--color-primary)] px-6 py-2 text-sm font-medium text-white hover:opacity-90 shadow-sm"
+                      className="rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 px-6 py-2.5 text-xs font-black text-white shadow-lg shadow-teal-600/20 transition-all transform active:scale-95 cursor-pointer"
                     >
                       Start Interview
                     </button>
@@ -456,18 +534,18 @@ export default function InterviewConsolePage() {
                         setPhase('thinking');
                         await requestNextQuestion();
                       }}
-                      className="rounded-lg bg-teal-600 px-6 py-2 text-sm font-semibold text-white hover:bg-teal-700 shadow-sm transition-colors duration-150"
+                      className="rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 px-6 py-2.5 text-xs font-black text-white shadow-lg shadow-teal-600/20 transition-all active:scale-95 cursor-pointer"
                     >
-                      Next Question
+                      Next Question ➔
                     </button>
                   )}
 
                   {phase === 'idle' && isLastQuestionAnswered && !sessionComplete && (
                     <button
                       onClick={handleGenerateReport}
-                      className="rounded-lg bg-emerald-600 px-6 py-2 text-sm font-bold text-white hover:bg-emerald-700 shadow-sm transition-all animate-pulse"
+                      className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-2.5 text-xs font-black text-white shadow-xl shadow-emerald-600/25 hover:scale-105 transition-all cursor-pointer"
                     >
-                      Finish Interview
+                      Finish Interview & View Report 🏆
                     </button>
                   )}
                   
@@ -476,29 +554,29 @@ export default function InterviewConsolePage() {
                     <>
                       <button
                         onClick={handleStartRecording}
-                        className="rounded-lg bg-blue-600 px-6 py-2 text-sm font-medium text-white hover:bg-blue-700 shadow-sm transition-colors duration-150"
+                        className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 px-6 py-2.5 text-xs font-black text-white shadow-md shadow-blue-600/20 transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
                       >
-                        Start Recording Answer
+                        <span>🎙️ Start Recording Answer</span>
                       </button>
 
                       {/* Allow manual submit of typed answers or edits */}
                       {userTranscript.trim().length > 0 && (
                         <button
                           onClick={handleSubmitAnswer}
-                          className="rounded-lg bg-green-600 px-6 py-2 text-sm font-medium text-white hover:bg-green-700 shadow-sm transition-colors duration-150"
+                          className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 px-6 py-2.5 text-xs font-black text-white shadow-md shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer"
                           disabled={submittingRef.current}
                         >
-                          Submit Answer
+                          Submit Answer ➔
                         </button>
                       )}
 
                       {phase === 'speaking' && (
                         <button
                           onClick={() => {
-                            stopSpeaking();
+                            stopAudioPlayback();
                             setPhase('idle');
                           }}
-                          className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          className="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-4 py-2.5 text-xs font-bold text-slate-700 transition-all cursor-pointer shadow-xs"
                         >
                           Skip Speaking
                         </button>
@@ -510,10 +588,10 @@ export default function InterviewConsolePage() {
                     <>
                       <button
                         onClick={handleSubmitAnswer}
-                        className="rounded-lg bg-emerald-600 px-6 py-2 text-sm font-medium text-white hover:bg-emerald-700 shadow-sm transition-colors duration-150"
+                        className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 px-6 py-2.5 text-xs font-black text-white shadow-md shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer"
                         disabled={submittingRef.current}
                       >
-                        Submit Answer
+                        Submit Answer ➔
                       </button>
                       <button
                         onClick={() => {
@@ -523,7 +601,7 @@ export default function InterviewConsolePage() {
                           } catch {}
                           setPhase('idle');
                         }}
-                        className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        className="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-4 py-2.5 text-xs font-bold text-slate-700 transition-all cursor-pointer shadow-xs"
                       >
                         Cancel
                       </button>
@@ -531,51 +609,51 @@ export default function InterviewConsolePage() {
                   )}
 
                   {(phase === 'thinking' || phase === 'submitting') && (
-                    <p className="text-sm text-gray-600 animate-pulse font-medium">Evaluating your answer, please wait...</p>
+                    <p className="text-xs text-teal-700 font-extrabold tracking-wide">Evaluating your answer with AI agents, please wait...</p>
                   )}
                 </div>
               </div>
 
-              <div className="min-h-0 overflow-hidden lg:col-span-2">
+              <div className="min-h-0 overflow-hidden lg:col-span-2 rounded-2xl border border-slate-200/90 bg-white shadow-xl shadow-slate-200/50">
                 <ConversationTimeline lines={lines} compact />
               </div>
             </div>
 
             {/* Bottom status bar */}
-            <div className="shrink-0 mt-2 rounded-lg border border-gray-200 bg-white p-3">
+            <div className="shrink-0 mt-1 rounded-xl border border-slate-200/90 bg-white p-3 shadow-md shadow-slate-200/50">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 text-xs font-bold">
                   {phase === 'speaking' && (
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
-                      <span className="text-sm text-gray-700">AI is speaking...</span>
+                      <div className="w-2.5 h-2.5 rounded-full bg-teal-500" />
+                      <span className="text-teal-800">AI Interviewer is speaking...</span>
                     </div>
                   )}
                   {phase === 'listening' && (
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
-                      <span className="text-sm text-gray-700">Listening to your answer...</span>
+                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                      <span className="text-emerald-800">Listening to your answer...</span>
                     </div>
                   )}
                   {phase === 'submitting' && (
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse" />
-                      <span className="text-sm text-gray-700">Submitting answer...</span>
+                      <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                      <span className="text-blue-800">Transcribing & Submitting answer...</span>
                     </div>
                   )}
                   {phase === 'thinking' && (
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-yellow-500 animate-pulse" />
-                      <span className="text-sm text-gray-700">Evaluating your answer...</span>
+                      <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                      <span className="text-amber-800">AI Agents evaluating technical accuracy...</span>
                     </div>
                   )}
                   {phase === 'idle' && !currentQuestion && (
-                    <span className="text-sm text-gray-600">Ready to start!</span>
+                    <span className="text-slate-500">Ready to start mock round!</span>
                   )}
                 </div>
                 <button
                   onClick={handleEndInterview}
-                  className="rounded border border-red-300 bg-red-50 px-3 py-1 text-xs text-red-700 hover:bg-red-100"
+                  className="rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 px-3 py-1 text-xs font-bold text-red-700 transition-all cursor-pointer shadow-xs"
                 >
                   End Interview
                 </button>
@@ -586,4 +664,7 @@ export default function InterviewConsolePage() {
       </div>
     </div>
   );
+
+
+
 }

@@ -18,9 +18,11 @@ from app.store import (
     InMemoryModel,
     DEMO_USER_ID,
 )
+from app.services.tts_service import TTSService
 from app.utils.question_text import strip_question_metadata
 
 router = APIRouter(tags=["websocket"])
+
 
 
 @router.websocket("/ws/sessions/{session_id}")
@@ -116,14 +118,18 @@ async def _get_current_or_next_attempt(session_id: str, session) -> dict | None:
     session_uuid = uuid.UUID(session_id)
     attempts = [a for a in _in_memory_attempts.values() if a.session_id == session_uuid]
     attempts.sort(key=lambda a: a.sequence_number)
+    tts = TTSService()
 
     if attempts:
         attempt = attempts[-1]
         if not attempt.answer_text and not attempt.audio_ref and not attempt.video_ref:
+            clean_q = strip_question_metadata(attempt.question_text)
+            audio_url = await tts.generate_question_audio(str(attempt.id), clean_q, attempt.agent_type)
             return {
                 "attempt_id": str(attempt.id),
                 "agent_type": attempt.agent_type,
-                "question_text": strip_question_metadata(attempt.question_text),
+                "question_text": clean_q,
+                "audio_url": audio_url,
             }
 
     if session.status == "completed":
@@ -179,8 +185,13 @@ async def _get_current_or_next_attempt(session_id: str, session) -> dict | None:
         session.start_time = datetime.utcnow()
     session.current_stage = result.get("agent_type", "technical")
 
+    clean_q = strip_question_metadata(new_attempt.question_text)
+    audio_url = await tts.generate_question_audio(str(new_attempt.id), clean_q, new_attempt.agent_type)
+
     return {
         "attempt_id": str(new_attempt.id),
         "agent_type": new_attempt.agent_type,
-        "question_text": strip_question_metadata(new_attempt.question_text),
+        "question_text": clean_q,
+        "audio_url": audio_url,
     }
+

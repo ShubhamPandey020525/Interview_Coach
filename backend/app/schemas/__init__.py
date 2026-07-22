@@ -109,6 +109,8 @@ class NextQuestionResponse(BaseModel):
     agent_type: str
     question_text: str
     sequence_number: int
+    audio_url: str | None = None
+
 
 
 class EvaluationSignalResponse(BaseModel):

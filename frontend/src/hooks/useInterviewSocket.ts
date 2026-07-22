@@ -45,7 +45,9 @@ export function useInterviewSocket(sessionId: string) {
         attempt_id: q.attempt_id,
         agent_type: q.agent_type,
         question_text: q.question_text,
+        audio_url: q.audio_url,
       };
+
       applyQuestion(payload);
       return payload;
     } catch (err) {

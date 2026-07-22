@@ -188,25 +188,35 @@ export default function SessionReportPage() {
 
 function ReportContainer({ report }: { report: any }) {
   return (
-    <div className="flex-1 h-full w-full flex overflow-hidden bg-slate-50 select-none p-6 gap-6 box-border">
+    <div className="flex-1 h-full w-full flex overflow-hidden bg-gradient-to-b from-slate-50 via-teal-50/20 to-slate-50 text-slate-800 select-none p-6 gap-6 box-border">
       
       {/* Left Panel: Summary Score, Strengths, Weaknesses, Recommended steps */}
       <div className="w-80 h-full flex flex-col gap-4 overflow-y-auto shrink-0 select-none pr-1 scrollbar-thin">
         
         {/* Summary Card */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
-          <span className="text-[10px] font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded uppercase">Evaluation Report</span>
-          <h2 className="text-base font-extrabold text-slate-800 tracking-tight mt-2 leading-tight">{report.target_role}</h2>
-          <p className="text-[10px] text-slate-500 mt-1">Review metrics, strengths, weaknesses and improvements.</p>
+        <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xl shadow-slate-200/50 backdrop-blur-md flex flex-col gap-3">
+          <span className="text-[10px] font-black text-teal-800 bg-teal-50 border border-teal-200 px-2.5 py-1 rounded-full uppercase tracking-widest self-start">
+            Evaluation Report
+          </span>
+          <div>
+            <h2 className="text-lg font-black text-slate-900 tracking-tight leading-tight">{report.target_role}</h2>
+            <p className="text-[11px] text-slate-500 mt-1">Multi-agent feedback & AI analysis summary.</p>
+          </div>
+          <Link
+            to="/dashboard"
+            className="w-full mt-1 flex items-center justify-center gap-2 py-2.5 px-4 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-xl text-xs font-black shadow-md shadow-teal-600/20 transition-all active:scale-95 cursor-pointer"
+          >
+            <span>🚀 Practice Again</span>
+          </Link>
         </div>
 
         {/* Strengths */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col gap-2">
-          <p className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Strengths Identified</p>
-          <ul className="text-xs text-slate-600 space-y-2">
+        <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xl shadow-slate-200/50 flex flex-col gap-2">
+          <p className="text-[10px] font-extrabold text-emerald-800 uppercase tracking-wider">Strengths Identified</p>
+          <ul className="text-xs text-slate-700 space-y-2">
             {report.strengths.map((s: string, i: number) => (
-              <li key={i} className="flex items-start gap-1.5 leading-snug">
-                <span className="text-emerald-500 font-bold">✓</span>
+              <li key={i} className="flex items-start gap-2 leading-snug">
+                <span className="text-emerald-600 font-black">✓</span>
                 <span>{s}</span>
               </li>
             ))}
@@ -214,12 +224,12 @@ function ReportContainer({ report }: { report: any }) {
         </div>
 
         {/* Weaknesses */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col gap-2">
-          <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Areas to Improve</p>
-          <ul className="text-xs text-slate-600 space-y-2">
+        <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xl shadow-slate-200/50 flex flex-col gap-2">
+          <p className="text-[10px] font-extrabold text-amber-800 uppercase tracking-wider">Areas to Improve</p>
+          <ul className="text-xs text-slate-700 space-y-2">
             {report.weaknesses.map((w: string, i: number) => (
-              <li key={i} className="flex items-start gap-1.5 leading-snug">
-                <span className="text-amber-500 font-bold">•</span>
+              <li key={i} className="flex items-start gap-2 leading-snug">
+                <span className="text-amber-600 font-black">•</span>
                 <span>{w}</span>
               </li>
             ))}
@@ -227,21 +237,21 @@ function ReportContainer({ report }: { report: any }) {
         </div>
 
         {/* Recommended Actions */}
-        {report.learning_plan.weak_areas.length > 0 && (
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col gap-2.5">
-            <p className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Next Action Steps</p>
+        {report.learning_plan?.weak_areas?.length > 0 && (
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xl shadow-slate-200/50 flex flex-col gap-2.5">
+            <p className="text-[10px] font-extrabold text-slate-800 uppercase tracking-wider">Next Action Steps</p>
             <div className="flex flex-wrap gap-1">
               {report.learning_plan.weak_areas.map((area: string) => (
-                <span key={area} className="rounded bg-amber-50 border border-amber-100 px-2 py-0.5 text-[9px] font-bold text-amber-800">
+                <span key={area} className="rounded-lg bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-bold text-amber-900">
                   {area}
                 </span>
               ))}
             </div>
-            {report.learning_plan.recommended_resources.length > 0 && (
-              <ul className="space-y-1.5 text-[10px] text-slate-500">
+            {report.learning_plan?.recommended_resources?.length > 0 && (
+              <ul className="space-y-1.5 text-[10px] text-slate-500 mt-1">
                 {report.learning_plan.recommended_resources.slice(0, 2).map((r: any, i: number) => (
                   <li key={i} className="leading-snug">
-                    <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-teal-600 font-semibold hover:underline">
+                    <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-teal-700 font-semibold hover:underline">
                       {r.title}
                     </a>
                     <span> ({r.type})</span>
@@ -256,21 +266,21 @@ function ReportContainer({ report }: { report: any }) {
       {/* Right Panel: Detailed Q&A Scrollable Cards */}
       <div className="flex-1 h-full overflow-y-auto flex flex-col gap-4 px-1 scrollbar-thin select-text">
         {report.attempts.map((a: any, i: number) => (
-          <div key={a.attempt_id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex flex-col gap-4">
+          <div key={a.attempt_id} className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xl shadow-slate-200/50 flex flex-col gap-4">
             
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
-                <span className="text-[9px] font-bold text-white px-2 py-0.5 rounded bg-teal-600 uppercase tracking-wide">
+                <span className="text-[10px] font-black text-teal-900 px-2.5 py-0.5 rounded-md bg-teal-100 uppercase tracking-wide">
                   {a.agent_type}
                 </span>
-                <span className="text-xs font-extrabold text-slate-700">Question {i + 1}</span>
+                <span className="text-xs font-black text-slate-800">Question {i + 1}</span>
               </div>
               {a.filler_word_count != null && (
-                <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
                   a.filler_word_count > 0 
-                    ? 'bg-amber-50 border border-amber-150 text-amber-800' 
-                    : 'bg-emerald-50 border border-emerald-150 text-emerald-800'
+                    ? 'bg-amber-50 border-amber-200 text-amber-900' 
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-900'
                 }`}>
                   {a.filler_word_count > 0 
                     ? `⚠️ ${a.filler_word_count} filler words` 
@@ -280,28 +290,28 @@ function ReportContainer({ report }: { report: any }) {
             </div>
 
             {/* Question Box */}
-            <div className="flex flex-col gap-1 bg-slate-50/50 border border-slate-100 rounded-xl p-3">
-              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Interviewer Question</span>
-              <p className="text-xs text-slate-800 font-semibold leading-relaxed">
+            <div className="flex flex-col gap-1.5 bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+              <span className="text-[10px] font-bold text-teal-800 uppercase tracking-wider">Interviewer Question</span>
+              <p className="text-xs text-slate-900 font-semibold leading-relaxed">
                 "{a.question_text}"
               </p>
             </div>
 
             {/* Split Comparison Columns */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               
               {/* User Response Column */}
-              <div className="rounded-xl border border-slate-250 bg-slate-50/20 p-3.5 flex flex-col gap-2">
-                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Your Answer</span>
-                <p className="text-xs text-slate-700 leading-relaxed min-h-[70px] bg-white border border-slate-100 rounded-lg p-2.5 whitespace-pre-wrap">
+              <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3.5 flex flex-col gap-2">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Your Answer</span>
+                <p className="text-xs text-slate-800 leading-relaxed min-h-[70px] bg-white border border-slate-200 rounded-lg p-3 whitespace-pre-wrap font-sans">
                   {a.answer_text || 'No response recorded.'}
                 </p>
               </div>
 
               {/* Best Answer Example Column */}
-              <div className="rounded-xl border border-emerald-100 bg-emerald-50/10 p-3.5 flex flex-col gap-2">
-                <span className="text-[9px] font-bold text-emerald-700 uppercase tracking-wider">Recommended Answer Example</span>
-                <p className="text-xs text-slate-800 leading-relaxed min-h-[70px] bg-white border border-emerald-100 rounded-lg p-2.5 whitespace-pre-wrap">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-3.5 flex flex-col gap-2">
+                <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Recommended Answer Example</span>
+                <p className="text-xs text-slate-800 leading-relaxed min-h-[70px] bg-white border border-emerald-200 rounded-lg p-3 whitespace-pre-wrap font-sans">
                   {a.best_answer || getFallbackBestAnswer(a.question_text, report.target_role)}
                 </p>
               </div>
@@ -309,19 +319,19 @@ function ReportContainer({ report }: { report: any }) {
 
             {/* Differences Feedback */}
             {a.user_answer_comparison && (
-              <div className="rounded-xl border border-blue-100 bg-blue-50/10 p-3.5 flex flex-col gap-1.5">
-                <span className="text-[9px] font-bold text-blue-700 uppercase tracking-wider">Key differences &amp; feedback</span>
-                <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">{a.user_answer_comparison}</p>
+              <div className="rounded-xl border border-teal-200 bg-teal-50/40 p-3.5 flex flex-col gap-1.5">
+                <span className="text-[10px] font-bold text-teal-800 uppercase tracking-wider">Key differences &amp; feedback</span>
+                <p className="text-xs text-slate-800 leading-relaxed whitespace-pre-wrap">{a.user_answer_comparison}</p>
               </div>
             )}
 
             {/* Factual errors */}
             {a.factual_inaccuracies && a.factual_inaccuracies.length > 0 && (
-              <div className="rounded-xl border border-rose-200 bg-rose-50/10 p-3.5 flex flex-col gap-1.5">
-                <span className="text-[9px] font-bold text-rose-700 uppercase tracking-wider">⚠️ Technical Errors Spotted</span>
+              <div className="rounded-xl border border-rose-200 bg-rose-50/60 p-3.5 flex flex-col gap-1.5">
+                <span className="text-[10px] font-bold text-rose-800 uppercase tracking-wider">⚠️ Technical Errors Spotted</span>
                 <ul className="list-disc pl-4 space-y-1">
                   {a.factual_inaccuracies.map((err: string, idx: number) => (
-                    <li key={idx} className="text-xs text-rose-950 font-medium">{err}</li>
+                    <li key={idx} className="text-xs text-rose-900 font-medium">{err}</li>
                   ))}
                 </ul>
               </div>
@@ -332,3 +342,5 @@ function ReportContainer({ report }: { report: any }) {
     </div>
   );
 }
+
+

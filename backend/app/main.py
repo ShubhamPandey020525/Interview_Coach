@@ -1,11 +1,20 @@
 from contextlib import asynccontextmanager
+import os
 
-# pyrefly: ignore [missing-import]
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import attempts, health, media, profile, sessions, ws, users
+from fastapi.staticfiles import StaticFiles
+
+
+
+from app.api import attempts, health, media, profile, sessions, users, ws
 from app.config import get_settings
-from app.core.exceptions import AppException, RequestIDMiddleware, app_exception_handler, generic_exception_handler
+from app.core.exceptions import (
+    AppException,
+    RequestIDMiddleware,
+    app_exception_handler,
+    generic_exception_handler,
+)
 
 settings = get_settings()
 
@@ -36,3 +45,6 @@ app.include_router(attempts.router)
 app.include_router(media.router)
 app.include_router(ws.router)
 app.include_router(users.router)
+
+os.makedirs(settings.media_root, exist_ok=True)
+app.mount("/media", StaticFiles(directory=settings.media_root), name="media")

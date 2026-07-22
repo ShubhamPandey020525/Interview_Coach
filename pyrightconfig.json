@@ -1,7 +1,21 @@
 {
-  "venvPath": "C:\\Users\\pande\\miniconda3\\envs",
+  "venvPath": "C:/Users/pande/miniconda3/envs",
   "venv": "ai-interview",
+  "executionEnvironments": [
+    {
+      "root": "backend",
+      "extraPaths": [
+        ".",
+        "C:/Users/pande/miniconda3/envs/ai-interview/Lib/site-packages"
+      ]
+    }
+  ],
   "extraPaths": [
-    "./backend"
-  ]
+    "backend",
+    "C:/Users/pande/miniconda3/envs/ai-interview/Lib/site-packages"
+  ],
+  "reportMissingImports": "none",
+  "reportMissingModuleSource": "none"
 }
+
+

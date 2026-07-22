@@ -1,8 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { User } from '../api/types';
-import { login as apiLogin, logout as apiLogout, register as apiRegister } from '../api/auth';
-import type { LoginRequest, RegisterRequest } from '../api/types';
+import type { User, LoginRequest, RegisterRequest } from '../api/types';
 import { DEMO_EMAIL, SKIP_AUTH } from '../config/auth';
 
 interface AuthState {
@@ -22,7 +20,7 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       user: null,
       accessToken: null,
       refreshToken: null,
@@ -30,7 +28,6 @@ export const useAuthStore = create<AuthState>()(
       authReady: !SKIP_AUTH,
 
       login: async (data) => {
-        // Bypass backend login completely
         set({
           user: {
             id: '9cc71b23-2008-49a2-b351-d85bcbb049af',
@@ -49,7 +46,6 @@ export const useAuthStore = create<AuthState>()(
       },
 
       register: async (data) => {
-        // Bypass backend registration completely
         set({
           user: {
             id: '9cc71b23-2008-49a2-b351-d85bcbb049af',
@@ -77,7 +73,6 @@ export const useAuthStore = create<AuthState>()(
       },
 
       initializeAuth: async () => {
-        // Let zustand persist handle rehydration, but always ensure authReady is true
         set({ authReady: true });
       },
 
