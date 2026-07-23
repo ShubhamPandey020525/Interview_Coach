@@ -116,7 +116,6 @@ export default function InterviewConsolePage() {
       const backendOrigin = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
       const fullBackendUrl = `${backendOrigin.replace(/\/$/, '')}${cleanPath}`;
 
-      // Helper for browser Web Speech API fallback
       const fallbackToSpeech = () => {
         speak(speechText, {
           onStart: () => setPhase('speaking'),
@@ -125,8 +124,8 @@ export default function InterviewConsolePage() {
         });
       };
 
-      // 1. Try relative path via Vite proxy (/media/tts/...)
-      const audioEl = new Audio(cleanPath);
+      // Try full backend URL first for direct file access
+      const audioEl = new Audio(fullBackendUrl);
       audioElementRef.current = audioEl;
 
       audioEl.onplay = () => setPhase('speaking');
@@ -135,8 +134,8 @@ export default function InterviewConsolePage() {
         audioElementRef.current = null;
       };
       audioEl.onerror = () => {
-        // 2. Try full backend URL if proxy failed
-        const retryEl = new Audio(fullBackendUrl);
+        // Fallback to relative cleanPath or Web Speech API
+        const retryEl = new Audio(cleanPath);
         audioElementRef.current = retryEl;
         retryEl.onplay = () => setPhase('speaking');
         retryEl.onended = () => {
@@ -144,7 +143,7 @@ export default function InterviewConsolePage() {
           audioElementRef.current = null;
         };
         retryEl.onerror = () => {
-          // 3. Fallback to Web Speech API
+          audioElementRef.current = null;
           fallbackToSpeech();
         };
         retryEl.play().catch(() => fallbackToSpeech());
@@ -152,7 +151,6 @@ export default function InterviewConsolePage() {
 
       setPhase('speaking');
       audioEl.play().catch(() => {
-        // Autoplay policy prevented playback, attempt fallback or set idle for button click
         fallbackToSpeech();
       });
     },
@@ -228,8 +226,7 @@ export default function InterviewConsolePage() {
         setPhase('idle');
         setIsLastQuestionAnswered(true);
       } else {
-        setPhase('thinking');
-        await requestNextQuestion();
+        setPhase('idle');
       }
     } catch (err) {
       setErrorMessage(getErrorMessage(err));
@@ -238,7 +235,7 @@ export default function InterviewConsolePage() {
       submittingRef.current = false;
       submitPendingRef.current = false;
     }
-  }, [sessionId, addLine, audio, requestNextQuestion]);
+  }, [sessionId, addLine, audio]);
 
   // Effect to wait for audioBlob to be ready if submit was clicked during recording
   useEffect(() => {
