@@ -536,7 +536,7 @@ async def complete_session(
 ):
     session = await _get_session_or_404(session_id, user)
     if session.status == "completed":
-        raise AppException("SESSION_ALREADY_COMPLETED", "This session is already completed.", 409)
+        return SessionResponse.model_validate(session)
 
     graph = get_interview_graph()
     plan_data = await graph.complete_session(str(session.id))
