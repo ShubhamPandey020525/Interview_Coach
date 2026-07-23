@@ -28,7 +28,7 @@ An enterprise-grade, full-stack, AI-powered mock interview simulator designed to
     - [Frontend Stack](#frontend-stack)
     - [Backend Stack](#backend-stack)
   - [📂 Complete Repository Structure](#-complete-repository-structure)
-  - [🗄️ Database Schema \& Models](#️-database-schema--models)
+  - [💾 In-Memory State Store & Data Models (`app/store.py`)](#-in-memory-state-store--data-models-appstorepy)
   - [⚙️ First-Time Installation \& Setup Guide](#️-first-time-installation--setup-guide)
     - [1. Prerequisites](#1-prerequisites)
     - [2. Clone the Repository](#2-clone-the-repository)
@@ -241,11 +241,9 @@ To optimize responsiveness, the system splits communication into two distinct ex
 ### Backend Stack
 - **Web Framework**: FastAPI 0.109+ (`fastapi`, `uvicorn[standard]`)
 - **Language**: Python 3.11
-- **Database ORM**: SQLAlchemy 2.0 (`sqlalchemy[asyncio]`)
-- **Database Drivers**: `aiosqlite` (SQLite default) / `asyncpg` (PostgreSQL optional)
-- **Migrations**: Alembic 1.13+ (`alembic`)
-- **Schema Validation**: Pydantic v2 (`pydantic`, `pydantic-settings`)
-- **Security & Auth**: `passlib[bcrypt]` (Password hashing), SHA-256 (Refresh token hashing), `python-jose` (JWT generation/validation)
+- **State & Data Store**: In-Memory Transient Store (`app/store.py`) with zero external database setup required (`_in_memory_users`, `_in_memory_sessions`, `_in_memory_attempts`, `_in_memory_resumes`, `_in_memory_learning_plans`)
+- **Data Schemas**: Pydantic v2 (`pydantic`, `pydantic-settings`)
+- **Security & Auth**: SHA-256 (Token hashing), Mock auth bypass dependency (`deps.py`)
 - **Testing**: Pytest 7.4+ (`pytest`, `pytest-asyncio`, `pytest-cov`)
 
 ---
@@ -367,70 +365,27 @@ Interview_Coach/
 
 ---
 
-## 🗄️ Database Schema & Models
+## 💾 In-Memory State Store & Data Models (`app/store.py`)
 
-The backend utilizes SQLAlchemy 2.0 async models defined in `backend/app/models/__init__.py`:
+The backend operates on a high-performance **In-Memory Transient State Store** (`backend/app/store.py`), requiring **zero database installation, zero configuration, and zero migrations**. All interview sessions, user profiles, attempts, and learning plans are managed through fast in-memory dictionaries:
+
+| Memory Store Dict | Data Entity Model | Description |
+| :--- | :--- | :--- |
+| `_in_memory_users` | `MockUser` | Stores active user identity (pre-seeded with `demo@example.com` / `DEMO_USER_ID`) |
+| `_in_memory_sessions` | `InMemoryModel` | Stores active and completed interview sessions, target roles, scores, and status |
+| `_in_memory_attempts` | `InMemoryModel` | Stores question attempts, candidate answers, score breakdowns, WPM, and CV metrics |
+| `_in_memory_resumes` | `dict` | Caches parsed resume skills, subtopic mappings, project stacks, and raw text |
+| `_in_memory_learning_plans` | `InMemoryModel` | Caches generated post-interview learning plans and resource recommendations |
 
 ```mermaid
-erDiagram
-    User ||--o{ RefreshToken : owns
-    User ||--o| Profile : has
-    User ||--o{ InterviewSession : conducts
-    InterviewSession ||--o{ Question : contains
-    InterviewSession ||--o{ Attempt : records
-    InterviewSession ||--o| LearningPlan : generates
-
-    User {
-        string id PK
-        string email UK
-        string hashed_password
-        string full_name
-        datetime created_at
-    }
-
-    RefreshToken {
-        string id PK
-        string token_hash SK
-        string user_id FK
-        datetime expires_at
-        boolean revoked
-    }
-
-    Profile {
-        string id PK
-        string user_id FK
-        string target_role
-        string resume_path
-        json parsed_skills
-        json parsed_projects
-        string raw_resume_text
-    }
-
-    InterviewSession {
-        string id PK
-        string user_id FK
-        string target_role
-        string status
-        float overall_score
-        float technical_score
-        float communication_score
-        datetime created_at
-    }
-
-    Attempt {
-        string id PK
-        string session_id FK
-        string question_id FK
-        string user_answer
-        float score
-        string reasoning
-        string best_answer
-        int filler_word_count
-        float pace_wpm
-        float eye_contact_ratio
-        float posture_stability
-        datetime created_at
-    }
+graph LR
+    Client[API / WebSocket Client] --> Controllers[FastAPI Controllers: sessions.py / profile.py / ws.py]
+    Controllers --> Store[In-Memory Store: app/store.py]
+    Store --> U["_in_memory_users"]
+    Store --> S["_in_memory_sessions"]
+    Store --> A["_in_memory_attempts"]
+    Store --> R["_in_memory_resumes"]
+    Store --> L["_in_memory_learning_plans"]
 ```
 
 ---
