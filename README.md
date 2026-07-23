@@ -150,10 +150,11 @@ Orchestration      Speech-to-Text         Text-to-Speech    Computer Vision     
 - **Role**: Manages multi-agent workflow state, edge routing, checkpointer persistence (`MemorySaver`), and agent turn execution.
 
 ### 2. Speech-to-Text (Audio-to-Text)
-- **Library**: `openai>=1.12.0` (`AsyncOpenAI` client)
-- **Model**: `whisper-1` via `client.audio.transcriptions.create`
+- **Primary Engine**: `faster-whisper` (Local `WhisperModel` using `base` model with `int8` quantization on CPU via `asyncio.to_thread`) — **100% FREE, local execution with zero API token cost**.
+- **Fallback Engine**: `openai>=1.12.0` (`AsyncOpenAI` client with `whisper-1` model).
+- **Frontend Real-Time Stream**: Web Speech API (`window.SpeechRecognition` in `useSpeechRecognition.ts`) for browser-native real-time transcript preview.
 - **Role**: Converts candidate audio recordings (`.webm`, `.mp3`, `.wav`) into exact text transcripts.
-- **Customization**: Uses prompt hints (`"Um, uh, er, like, you know..."`) to ensure Whisper does not strip filler words during transcription, keeping speech analysis accurate.
+- **Customization**: Preserves filler words (`um`, `uh`, `like`, `you know`, `basically`, `actually`, `so`) for accurate verbal communication analysis.
 
 ### 3. Text-to-Speech (Text-to-Audio)
 - **Library**: `edge-tts>=7.0.0` (`edge_tts.Communicate`)
