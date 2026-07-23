@@ -597,7 +597,7 @@ async def get_report(
                 question_text=a.question_text,
                 score=a.score,
                 agent_type=a.agent_type,
-                answer_text=a.answer_text,
+                answer_text=getattr(a, "answer_text", None) or getattr(a, "transcript", None) or getattr(a, "user_answer", None),
                 best_answer=a.best_answer,
                 user_answer_comparison=a.user_answer_comparison,
                 filler_word_count=a.filler_word_count,

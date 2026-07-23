@@ -1,6 +1,42 @@
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getReport } from '../api/sessions';
+
+function ExpandableText({
+  text,
+  maxLength = 180,
+  className = '',
+}: {
+  text: string | null | undefined;
+  maxLength?: number;
+  className?: string;
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const cleanText = text?.trim() || '';
+  if (!cleanText) {
+    return <span className="italic text-slate-400 font-normal">No response recorded.</span>;
+  }
+
+  const shouldTruncate = cleanText.length > maxLength;
+  const displayText = shouldTruncate && !isExpanded ? `${cleanText.slice(0, maxLength).trim()}...` : cleanText;
+
+  return (
+    <div className={className}>
+      <p className="whitespace-pre-wrap">{displayText}</p>
+      {shouldTruncate && (
+        <button
+          type="button"
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="mt-2 inline-flex items-center gap-1 text-[11px] font-black text-teal-700 hover:text-teal-900 transition-colors cursor-pointer select-none bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-md"
+        >
+          <span>{isExpanded ? 'Show Less 🔼' : 'Read More 🔽'}</span>
+        </button>
+      )}
+    </div>
+  );
+}
 
 const MOCK_REPORTS: Record<string, any> = {
   'mock-session-1': {
@@ -303,17 +339,17 @@ function ReportContainer({ report }: { report: any }) {
               {/* User Response Column */}
               <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3.5 flex flex-col gap-2">
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Your Answer</span>
-                <p className="text-xs text-slate-800 leading-relaxed min-h-[70px] bg-white border border-slate-200 rounded-lg p-3 whitespace-pre-wrap font-sans">
-                  {a.answer_text || 'No response recorded.'}
-                </p>
+                <div className="text-xs text-slate-800 leading-relaxed min-h-[70px] bg-white border border-slate-200 rounded-lg p-3 font-sans">
+                  <ExpandableText text={a.answer_text} maxLength={180} />
+                </div>
               </div>
 
               {/* Best Answer Example Column */}
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-3.5 flex flex-col gap-2">
                 <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Recommended Answer Example</span>
-                <p className="text-xs text-slate-800 leading-relaxed min-h-[70px] bg-white border border-emerald-200 rounded-lg p-3 whitespace-pre-wrap font-sans">
-                  {a.best_answer || getFallbackBestAnswer(a.question_text, report.target_role)}
-                </p>
+                <div className="text-xs text-slate-800 leading-relaxed min-h-[70px] bg-white border border-emerald-200 rounded-lg p-3 font-sans">
+                  <ExpandableText text={a.best_answer || getFallbackBestAnswer(a.question_text, report.target_role)} maxLength={180} />
+                </div>
               </div>
             </div>
 
@@ -321,7 +357,7 @@ function ReportContainer({ report }: { report: any }) {
             {a.user_answer_comparison && (
               <div className="rounded-xl border border-teal-200 bg-teal-50/40 p-3.5 flex flex-col gap-1.5">
                 <span className="text-[10px] font-bold text-teal-800 uppercase tracking-wider">Key differences &amp; feedback</span>
-                <p className="text-xs text-slate-800 leading-relaxed whitespace-pre-wrap">{a.user_answer_comparison}</p>
+                <ExpandableText text={a.user_answer_comparison} maxLength={220} className="text-xs text-slate-800 leading-relaxed" />
               </div>
             )}
 
