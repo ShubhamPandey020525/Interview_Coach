@@ -5,22 +5,22 @@ function pickVoice(): SpeechSynthesisVoice | undefined {
   const voices = window.speechSynthesis.getVoices();
   if (voices.length === 0) return undefined;
 
-  // Try to find a local English male voice first (offline, reliable)
-  const localMaleEnglish = voices.find((v) => {
+  // 1. Try to find an English male voice
+  const maleEnglish = voices.find((v) => {
     const name = v.name.toLowerCase();
     const isEnglish = v.lang.startsWith('en');
-    const isMaleKeyword = name.includes('male') || name.includes('david') || name.includes('microsoft david') || name.includes('google us english') || name.includes('mark') || name.includes('guy') || name.includes('brian');
+    const isMaleKeyword = name.includes('male') || name.includes('david') || name.includes('google us english') || name.includes('mark') || name.includes('guy') || name.includes('brian') || name.includes('george') || name.includes('ryan');
     const isFemaleKeyword = name.includes('female') || name.includes('zira') || name.includes('hazel') || name.includes('susan') || name.includes('haruka') || name.includes('heera');
-    return isEnglish && isMaleKeyword && !isFemaleKeyword && v.localService;
+    return isEnglish && isMaleKeyword && !isFemaleKeyword;
   });
-  if (localMaleEnglish) return localMaleEnglish;
+  if (maleEnglish) return maleEnglish;
 
-  // Try any local English voice (reliable)
-  const localEnglish = voices.find((v) => v.lang.startsWith('en') && v.localService);
-  if (localEnglish) return localEnglish;
+  // 2. Try any English voice
+  const englishVoice = voices.find((v) => v.lang.startsWith('en'));
+  if (englishVoice) return englishVoice;
 
-  // Do NOT return network-based voices, default to browser standard voice if no local English voice exists
-  return undefined;
+  // 3. Fallback to any voice available
+  return voices[0];
 }
 
 function waitMs(ms: number): Promise<void> {

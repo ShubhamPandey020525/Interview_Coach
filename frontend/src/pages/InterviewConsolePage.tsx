@@ -179,6 +179,7 @@ export default function InterviewConsolePage() {
 
   const handleReadQuestion = useCallback(() => {
     if (!currentQuestion) return;
+    primeSpeech();
     deliverQuestion(
       currentQuestion.attempt_id,
       currentQuestion.question_text,
@@ -186,7 +187,7 @@ export default function InterviewConsolePage() {
       questionNumberRef.current || 1,
       currentQuestion.audio_url
     );
-  }, [currentQuestion, deliverQuestion]);
+  }, [currentQuestion, deliverQuestion, primeSpeech]);
 
 
   const handleStartRecording = useCallback(() => {
