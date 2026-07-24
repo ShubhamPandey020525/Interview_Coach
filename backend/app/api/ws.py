@@ -1,6 +1,6 @@
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -29,8 +29,28 @@ router = APIRouter(tags=["websocket"])
 async def interview_websocket(websocket: WebSocket, session_id: str, token: str = ""):
     user_id = str(DEMO_USER_ID)
 
-    session = _in_memory_sessions.get(uuid.UUID(session_id))
-    if not session or str(session.user_id) != user_id:
+    try:
+        sess_uuid = uuid.UUID(session_id)
+    except ValueError:
+        await websocket.close(code=4401)
+        return
+
+    session = _in_memory_sessions.get(sess_uuid)
+    if not session:
+        session = InMemoryModel(
+            id=sess_uuid,
+            user_id=DEMO_USER_ID,
+            target_role="Software Engineer",
+            session_name="Interview Session",
+            status="in_progress",
+            current_stage="technical",
+            start_time=datetime.now(timezone.utc),
+            end_time=None,
+            created_at=datetime.now(timezone.utc),
+        )
+        _in_memory_sessions[sess_uuid] = session
+
+    if str(session.user_id) != user_id:
         await websocket.close(code=4401)
         return
 
@@ -175,14 +195,14 @@ async def _get_current_or_next_attempt(session_id: str, session) -> dict | None:
         metrics=None,
         factual_inaccuracies=None,
         weighted_breakdown=None,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
         evaluation_signals=[]
     )
     _in_memory_attempts[new_attempt_id] = new_attempt
 
     if session.status == "created":
         session.status = "in_progress"
-        session.start_time = datetime.utcnow()
+        session.start_time = datetime.now(timezone.utc)
     session.current_stage = result.get("agent_type", "technical")
 
     clean_q = strip_question_metadata(new_attempt.question_text)

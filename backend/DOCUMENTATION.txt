@@ -1,378 +1,84 @@
-
-AI Technical Interview Coach — Backend Documentation
-====================================================
-
-Overview
---------
-FastAPI backend for an AI-powered mock technical interview platform.
-Candidates upload a resume, practice live interviews (text/audio/video answers),
-receive adaptive follow-up questions, and get a personalized learning plan.
-
-Stack: FastAPI + SQLAlchemy (async) + LangGraph + OpenAI (optional) + SQLite/PostgreSQL
-
-
-================================================================================
-RESUME-ONLY LIVE INTERVIEWS (no predefined questions)
-================================================================================
-
-Production behaviour (OPENAI_API_KEY set):
-  • NO canned or generic questions — every question is generated live by GPT-4o-mini.
-  • Questions MUST reference specific skills, projects, or experience from the resume.
-  • If resume is missing or empty → API returns 422 RESUME_REQUIRED.
-  • FakeLLMProvider is used ONLY when ENVIRONMENT=test (pytest), never in dev/prod.
-  • Without OPENAI_API_KEY in dev, the server raises an error at LLM call time.
-
-Resume required before:
-  • POST /api/sessions (create interview)
-  • GET /api/sessions/{id}/next-question
-
-LLM strict rules (see llm_provider.py RESUME_ONLY_RULES):
-  • Never ask "tell me about yourself" or off-resume trivia
-  • Follow-ups probe the same resume item deeper
-  • Scenarios use technologies listed on the resume only
-  • Learning plan gaps tied to resume skills
-
-
-================================================================================
-ENVIRONMENT SETUP (.env)
-================================================================================
-
-IMPORTANT: Do NOT put comments on the same line as values in .env files.
-Wrong:  SECRET_KEY=abc   # my comment   → entire string becomes the key
-Right:  SECRET_KEY=abc
-        # my comment on its own line
-
-Required variables:
-  ENVIRONMENT=development
-  SECRET_KEY=<generate with: python -c "import secrets; print(secrets.token_urlsafe(32))">
-  DATABASE_URL=sqlite+aiosqlite:///./app.db
-  OPENAI_API_KEY=<optional — FakeLLM used when empty>
-  MEDIA_ROOT=./media
-  FRONTEND_ORIGINS=http://localhost:5173,http://localhost:5174
-
-FRONTEND_ORIGINS must include the port Vite uses (5173 or 5174 if 5173 is busy).
-Without correct CORS, login/register from the browser will fail with OPTIONS 400.
-
-Demo user (after seed): demo@example.com / demo12345
-
-
-================================================================================
-PROJECT STRUCTURE
-================================================================================
-
 backend/
-├── app/
-│   ├── agents/          # 8 AI agents + LangGraph orchestration
-│   ├── api/             # REST + WebSocket endpoints
-│   ├── core/            # Security, exceptions, logging
-│   ├── models/          # SQLAlchemy ORM models
-│   ├── schemas/         # Pydantic request/response models
-│   ├── services/        # LLM, storage, transcription, video analysis
-│   ├── config.py        # Settings from .env
-│   ├── database.py      # Async engine + session factory
-│   ├── main.py          # FastAPI app entry point
-│   └── seed.py          # Demo data seeder
-├── tests/
-├── alembic/
+│
+├── app/                              (Core Backend Logic)
+│   │
+│   ├── agents/
+│   │   ├── Contains the logic for all AI agents such as:
+│   │   │   • Resume Parsing
+│   │   │   • Interview Feedback
+│   │   │   • Follow-up Question Generation
+│   │   │   • Audio Analysis
+│   │   │   • Video Analysis
+│   │   │   • Personality Evaluation
+│   │
+│   ├── api/
+│   │   ├── REST API endpoints and route handlers
+│   │   ├── User Authentication
+│   │   ├── Session Management
+│   │   ├── User Profile APIs
+│   │   └── WebSocket endpoints (ws.py)
+│   │
+│   ├── services/
+│   │   ├── Third-party integrations
+│   │   ├── LLM Providers (Google Gemini/OpenAI/etc.)
+│   │   ├── File Storage & Upload Service
+│   │   ├── Speech Transcription Service
+│   │   └── Video Analysis Service
+│   │
+│   ├── core/
+│   │   ├── Application configuration
+│   │   ├── Exception handlers
+│   │   └── Logging configuration
+│   │
+│   ├── schemas/
+│   │   └── Pydantic request/response models for data validation
+│   │
+│   ├── utils/
+│   │   └── Shared utility functions (text formatting, question helpers, etc.)
+│   │
+│   ├── main.py
+│   │   └── FastAPI application entry point
+│   │
+│   ├── config.py
+│   │   └── Environment configuration loader
+│   │
+│   └── store.py
+│       └── In-memory storage management
+│
+├── tests/                            (Backend Testing)
+│   │
+│   ├── test_agents/
+│   │   └── Unit tests for AI agents
+│   │
+│   ├── test_users.py
+│   ├── test_sessions.py
+│   ├── test_profile.py
+│   └── conftest.py
+│       └── Pytest configuration and shared fixtures
+│
+├── media/                            (Storage Directory)
+│   └── Stores uploaded audio, video, and other media files
+│
+├── .env
+│   └── Environment variables (API keys, secrets, database URLs)
+│
+├── .env.example
+│   └── Sample environment configuration
+│
 ├── requirements.txt
-└── DOCUMENTATION.txt    # This file
-
-
-================================================================================
-8 AGENTS — HOW EACH ONE WORKS (Section 5.3)
-================================================================================
-
-All agents are registered in `app/agents/graph.py` → AGENT_REGISTRY.
-Session memory lives in `_session_states` (in-process dict) + LangGraph MemorySaver.
-
---------------------------------------------------------------------------------
-1. INTERVIEW ORCHESTRATOR AGENT  (orchestrator.py)
---------------------------------------------------------------------------------
-Role: Decides which specialist agent runs on each turn.
-
-Function: `decide_next_stage(state)` → returns next agent name
-
-Rules (planner logic):
-  • question_count >= max_questions (8)  →  "learning"
-  • last answer score < 65 AND followup_depth < 2  →  "followup"
-  • checkpoint_counter % 4 == 0 (and not already scenario)  →  "scenario"
-  • after followup/scenario with an answer  →  back to "technical"
-  • default  →  "technical"
-
-`orchestrator_node()` sets current_stage and next_agent in state.
-Called at the start of every `_run_agent_turn()` in graph.py.
-
---------------------------------------------------------------------------------
-2. TECHNICAL AGENT  (technical_agent.py)
---------------------------------------------------------------------------------
-Role: Core technical questions based on target role, resume, and performance.
-
-Flow:
-  1. Calls LLM `generate_question()` with agent_type="technical"
-  2. Passes: target_role, resume_context, conversation_history, weak_areas, scores
-  3. LLM adjusts difficulty (easier/harder/medium) from recent scores
-  4. Appends question to conversation_history
-  5. Increments question_count and checkpoint_counter
-
-Output state fields:
-  current_question, current_stage="technical", conversation_history, question_count
-
---------------------------------------------------------------------------------
-3. FOLLOW-UP AGENT  (followup_agent.py)
---------------------------------------------------------------------------------
-Role: Probes deeper when the candidate gave a weak answer (score < 65).
-
-Flow:
-  1. Triggered by orchestrator after low score
-  2. Generates a probing question (agent_type="followup")
-  3. Increments followup_depth (max 2 per topic)
-  4. Re-evaluates the previous answer if last_answer exists
-
-Output: current_question, current_stage="followup", followup_depth++
-
---------------------------------------------------------------------------------
-4. SCENARIO AGENT  (scenario_agent.py)
---------------------------------------------------------------------------------
-Role: Open-ended design / behavioral / real-world scenario questions.
-
-Flow:
-  1. Triggered every 4th checkpoint (checkpoint_counter % 4 == 0)
-  2. Generates scenario question (agent_type="scenario")
-  3. Resets followup_depth to 0
-  4. Evaluates previous answer for communication/scenario handling
-
-Output: current_stage="scenario", question_count++
-
---------------------------------------------------------------------------------
-5. RESUME AGENT  (resume_agent.py)
---------------------------------------------------------------------------------
-Role: Seeds interview context from uploaded resume at session start.
-
-Flow:
-  1. Called once in `graph.init_session()`
-  2. Uses LLM `parse_resume()` if raw text available, or uses existing profile
-  3. Enriches resume_context: skills[], projects[], experience_summary
-
-Output: resume_context merged into session state before first question.
-
-API path: POST /api/profile/resume → stores ResumeProfile → passed to init_session.
-
---------------------------------------------------------------------------------
-6. LEARNING AGENT  (learning_agent.py)
---------------------------------------------------------------------------------
-Role: Post-interview personalized improvement plan.
-
-Flow:
-  1. Called when orchestrator routes to "learning" (after 8 questions or manual complete)
-  2. Aggregates scores_collected + weak_areas from session
-  3. LLM `generate_learning_plan()` → weak_areas + recommended_resources
-
-Output: learning_plan dict saved to LearningPlan model on session complete.
-
---------------------------------------------------------------------------------
-7. AUDIO ANALYSIS AGENT  (audio_analysis_agent.py)
---------------------------------------------------------------------------------
-Role: Processes spoken answers — transcription + communication signals.
-
-Flow (async, off hot path):
-  1. Triggered in `process_media_evaluation()` after audio upload
-  2. Whisper transcription (or fake transcript in test/dev without API key)
-  3. Computes: clarity_score, pace_wpm, filler_word_count, confidence_score
-  4. Returns signals: type="communication", type="confidence"
-
-Transcript is fed to `graph.submit_answer()` for LLM technical evaluation.
-Signals stored as EvaluationSignal rows and broadcast over WebSocket.
-
---------------------------------------------------------------------------------
-8. VIDEO ANALYSIS AGENT  (video_analysis_agent.py)
---------------------------------------------------------------------------------
-Role: Engagement proxies from video responses.
-
-Flow (async):
-  1. Triggered when video_ref is uploaded
-  2. OpenCV + MediaPipe sample frames (fallback scores if deps missing)
-  3. Computes: face_present_ratio, eye_contact proxy, posture_stability
-  4. Returns signal: type="engagement"
-
-If no audio transcript, attempts Whisper on video file for answer text.
-
-
-================================================================================
-INTERVIEW GRAPH ORCHESTRATION  (graph.py)
-================================================================================
-
-Class: InterviewGraph
-  • Compiles LangGraph StateGraph with nodes: orchestrator, technical, followup,
-    scenario, learning
-  • MemorySaver checkpointer per session_id (thread_id)
-  • Singleton via get_interview_graph()
-
-Key methods:
-  init_session(session_id, user_id, target_role, resume_context)
-    → Creates initial state, runs Resume Agent, persists to _session_states
-
-  get_next_question(session_id)
-    → _run_agent_turn(): orchestrator → specialist agent → returns question
-
-  submit_answer(session_id, answer_text)
-    → LLM evaluate_answer(), updates scores_collected, weak_areas, history
-
-  complete_session(session_id)
-    → Forces learning stage, runs Learning Agent, returns learning_plan
-
-Turn flow (_run_agent_turn):
-  state → orchestrator_node → route → technical|followup|scenario|learning_node
-  → merged state persisted
-
-
-================================================================================
-SESSION STATE FIELDS  (state.py / graph.py initial dict)
-================================================================================
-
-session_id, user_id, target_role
-resume_context: { skills, projects, experience_summary }
-conversation_history: [{ role, content, agent_type?, timestamp }]
-current_stage: technical | followup | scenario | learning | complete
-current_question: string | null
-last_answer, last_answer_scores: { score, reasoning }
-followup_depth: 0-2
-scores_collected: [{ type, score }]
-weak_areas: string[]
-checkpoint_counter, question_count, max_questions (8)
-
-
-================================================================================
-API ENDPOINTS
-================================================================================
-
-Auth:
-  POST /api/auth/register
-  POST /api/auth/login
-  POST /api/auth/refresh
-  POST /api/auth/logout
-
-Profile:
-  POST /api/profile/resume     — upload PDF/DOCX, Resume Agent parses
-
-Sessions:
-  POST /api/sessions                          — create session, init graph
-  GET  /api/sessions                          — list (paginated)
-  GET  /api/sessions/{id}
-  GET  /api/sessions/{id}/next-question       — orchestrator + agent → new attempt
-  POST /api/sessions/{id}/answer              — text (sync) or audio/video (async)
-  POST /api/sessions/{id}/complete            — Learning Agent + report data
-  GET  /api/sessions/{id}/report
-  DELETE /api/sessions/{id}
-
-Progress:
-  GET /api/users/{id}/progress
-
-WebSocket:
-  WS /ws/sessions/{id}?token=<JWT>
-  Messages: ping/pong, answer, next_question
-  Server pushes: question, evaluation, session_complete
-
-Health:
-  GET /api/health → { status: "ok" }
-
-
-================================================================================
-ANSWER SUBMISSION PATHS
-================================================================================
-
-TEXT (WebSocket connected):
-  Browser → WS { type: "answer", payload: { attempt_id, text } }
-  → graph.submit_answer() → evaluation broadcast → next question broadcast
-
-TEXT (WebSocket disconnected):
-  Browser → POST /api/sessions/{id}/answer (form: attempt_id, answer_text)
-  → graph.submit_answer() → sync response with score
-
-AUDIO / VIDEO:
-  Browser → POST /api/sessions/{id}/answer (multipart: audio or video file)
-  → returns { status: "processing" } immediately
-  → background: Audio/Video Agents → transcript → graph.submit_answer()
-  → EvaluationSignals saved → WS evaluation + next question pushed
-
-
-================================================================================
-DATABASE MODELS
-================================================================================
-
-User              — account, role, experience_level, target_role
-ResumeProfile     — parsed skills, projects, experience_summary
-InterviewSession  — status: created | in_progress | completed | cancelled
-QuestionAttempt   — per-question record with text/audio/video refs, score
-EvaluationSignal  — technical | communication | confidence | engagement
-LearningPlan      — weak_areas[], recommended_resources[]
-ProgressHistory   — overall_score, trend_metrics per session
-RefreshToken      — hashed refresh tokens for JWT rotation
-
-
-================================================================================
-LLM PROVIDER  (services/llm_provider.py)
-================================================================================
-
-FakeLLMProvider (used when OPENAI_API_KEY empty or ENVIRONMENT=test):
-  • Deterministic questions and word-count-based scoring
-  • No network calls — safe for pytest
-
-OpenAILLMProvider (when API key set):
-  • gpt-4o-mini for questions, evaluation, learning plan, resume parsing
-  • Adaptive prompts include history, scores, weak areas
-  • Falls back to FakeLLM on API errors
-
-Methods:
-  generate_question(target_role, resume_context, agent_type, history, weak_areas, scores)
-  evaluate_answer(question, answer, agent_type) → score 0-100 + reasoning
-  generate_learning_plan(scores, weak_areas, target_role)
-  parse_resume(text)
-
-
-================================================================================
-FRONTEND INTEGRATION NOTES
-================================================================================
-
-Default frontend .env:
-  VITE_API_BASE_URL=http://localhost:8000
-  VITE_WS_BASE_URL=ws://localhost:8000
-  VITE_SKIP_AUTH=true   → auto-login demo@example.com
-
-If Vite uses port 5174, backend FRONTEND_ORIGINS must include it.
-
-Interview console features:
-  • Priya AI persona + TTS (browser speech synthesis)
-  • Live voice-to-text (Web Speech API)
-  • Text / Audio / Video answer modes with recording consent
-  • Real-time updates via WebSocket
-  • Auto-navigate to report when session_complete received
-
-
-================================================================================
-RUNNING & TROUBLESHOOTING
-================================================================================
-
-Start backend:
-  cd backend
-  conda activate ai-interview
-  uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-Seed demo user:
-  python -m app.seed
-
-Start frontend:
-  cd frontend
-  npm run dev
-
-Common errors:
-  • "OPTIONS 400" on login → fix FRONTEND_ORIGINS in .env (add port 5174)
-  • "401 Unauthorized" on /api/sessions → login failed; check CORS + SECRET_KEY
-  • "Backend unreachable" banner → backend not running OR first health check failed
-  • "Guest" in navbar → SKIP_AUTH login failed; restart backend after .env fix
-  • SECRET_KEY with inline comment → JWT breaks; use validator in config.py
-
-Run tests:
-  cd backend && pytest          # 33 tests, FakeLLM, no API key needed
-
-API docs:
-  http://localhost:8000/docs
+│   └── Python dependencies
+│
+├── README.md
+│   └── Project documentation and setup guide
+│
+├── DOCUMENTATION.txt
+│   └── Detailed backend architecture and API documentation
+│
+├── test.db
+│   └── SQLite development database
+│
+├── pytest.ini
+│   └── Pytest configuration
+│
+└── fix_graph.py
+    └── Graph utility and maintenance script

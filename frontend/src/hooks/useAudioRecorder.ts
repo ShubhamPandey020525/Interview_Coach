@@ -70,7 +70,6 @@ export function useAudioRecorder() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     setMicReady(false);
-    chunksRef.current = [];
     hasSpokenRef.current = false;
   }, [stopMeter]);
 
@@ -238,9 +237,33 @@ export function useAudioRecorder() {
     [ensureMicrophoneAccess, startMeter]
   );
 
-  const stopRecording = useCallback(() => {
-    finalizeRecording(false);
-  }, [finalizeRecording]);
+  const stopRecording = useCallback((): Promise<Blob | null> => {
+    return new Promise((resolve) => {
+      const recorder = mediaRecorderRef.current;
+      if (!recorder || recorder.state === 'inactive') {
+        const mime = 'audio/webm';
+        const blob = chunksRef.current.length > 0 ? new Blob(chunksRef.current, { type: mime }) : null;
+        setAudioBlob(blob);
+        setIsRecording(false);
+        stopMeter();
+        mediaRecorderRef.current = null;
+        resolve(blob);
+        return;
+      }
+
+      recorder.onstop = () => {
+        const mime = recorder.mimeType || 'audio/webm';
+        const blob = chunksRef.current.length > 0 ? new Blob(chunksRef.current, { type: mime }) : null;
+        setAudioBlob(blob);
+        setIsRecording(false);
+        stopMeter();
+        mediaRecorderRef.current = null;
+        resolve(blob);
+      };
+
+      recorder.stop();
+    });
+  }, [stopMeter]);
 
   const reset = useCallback(() => {
     releaseMicForSpeech();

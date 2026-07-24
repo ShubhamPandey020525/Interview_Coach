@@ -11,13 +11,12 @@ from app.agents.personality_agent import personality_node
 from app.agents.resume_agent import resume_node
 from app.agents.scenario_agent import scenario_node
 from app.agents.technical_agent import technical_node
-from app.agents.video_analysis_agent import video_analysis_node
 from app.agents.state import InterviewState
 from app.services.llm_provider import LLMProvider, get_llm_provider
 
 
 
-# All 8 agents per system design spec (Section 5.3)
+# Specialist agents registry
 AGENT_REGISTRY = {
     "orchestrator": orchestrator_node,
     "technical": technical_node,
@@ -26,7 +25,6 @@ AGENT_REGISTRY = {
     "resume": resume_node,
     "learning": learning_node,
     "audio_analysis": audio_analysis_node,
-    "video_analysis": video_analysis_node,
 }
 
 # In-process session memory (LangGraph checkpointer + explicit cache for API round-trips)
@@ -113,10 +111,8 @@ class InterviewGraph:
         resume_context: dict | None = None,
     ) -> dict:
         import random
-        types = ["concept"] * 5 + ["project"] * 2 + ["scenario"] * 2
+        types = ["concept"] * 5 + ["project"] * 3 + ["scenario"] * 2
         random.shuffle(types)
-        first_project_idx = types.index("project")
-        types.insert(first_project_idx + 1, "followup")
 
         initial: dict = {
             "session_id": session_id,
@@ -243,15 +239,12 @@ def get_interview_graph(llm: LLMProvider | None = None) -> InterviewGraph:
     return _graph_instance
 
 
-async def run_media_agents(audio_path: str | None, video_path: str | None) -> list[dict]:
-    """Run Audio/Video Analysis Agents off the main conversational path."""
+async def run_media_agents(audio_path: str | None) -> list[dict]:
+    """Run Audio Analysis Agent off the main conversational path."""
     signals: list[dict] = []
     if audio_path:
         audio_result = await audio_analysis_node(audio_path)
         signals.extend(audio_result.signals)
-    if video_path:
-        video_result = video_analysis_node(video_path)
-        signals.extend(video_result.signals)
     return signals
 
 

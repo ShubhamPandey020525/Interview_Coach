@@ -41,3 +41,8 @@ frontend/.env
 # OS
 .DS_Store
 Thumbs.db
+
+# Test scripts & temp audio
+recorded_user_input.wav
+test_output.mp3
+test.py

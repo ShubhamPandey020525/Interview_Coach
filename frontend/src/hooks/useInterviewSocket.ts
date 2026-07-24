@@ -75,7 +75,6 @@ export function useInterviewSocket(sessionId: string) {
       setConnectionStatus('connected');
       setCloseCode(null);
       reconnectAttempt.current = 0;
-      void fetchQuestionViaRest();
       pingRef.current = window.setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'ping' }));

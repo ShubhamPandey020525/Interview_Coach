@@ -73,81 +73,47 @@ export function useSpeechSynthesis() {
     return new Promise((resolve) => {
       clearTimers();
 
-      let finished = false;
-
-      const finish = (kind: 'end' | 'error') => {
-        if (finished) return;
-        finished = true;
-        speakingRef.current = false;
-        clearTimers();
-        if (kind === 'error') callbacks?.onError?.();
-        else callbacks?.onEnd?.();
-        resolve();
-      };
-
       const run = async () => {
-        // ONLY cancel if currently speaking to avoid freezing Chrome's speech engine
         if (window.speechSynthesis.speaking) {
           window.speechSynthesis.cancel();
           await waitMs(100);
         }
         window.speechSynthesis.resume();
 
-        const utterance = new SpeechSynthesisUtterance(spokenText);
+        // Split text into natural sentences so browser speech synthesis never cuts off mid-sentence
+        const sentences = spokenText.match(/[^.!?]+[.!?]+/g) || [spokenText];
 
-        // Keep a global reference to prevent Chrome's garbage collection bug
-        if (typeof window !== 'undefined') {
-          (window as any)._activeUtterances = (window as any)._activeUtterances || [];
-          (window as any)._activeUtterances.push(utterance);
+        for (let i = 0; i < sentences.length; i++) {
+          if (!speakingRef.current && i > 0) break;
+          const textChunk = sentences[i].trim();
+          if (!textChunk) continue;
+
+          await new Promise<void>((resChunk) => {
+            const utterance = new SpeechSynthesisUtterance(textChunk);
+            utterance.rate = 0.95;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+            utterance.lang = 'en-US';
+
+            const voice = pickVoice();
+            if (voice) utterance.voice = voice;
+
+            utterance.onstart = () => {
+              speakingRef.current = true;
+              if (i === 0) callbacks?.onStart?.();
+            };
+
+            utterance.onend = () => resChunk();
+            utterance.onerror = () => resChunk();
+
+            window.speechSynthesis.speak(utterance);
+            window.speechSynthesis.resume();
+          });
         }
 
-        utterance.rate = 0.9;
-        utterance.pitch = 1;
-        utterance.volume = 1;
-        utterance.lang = 'en-US';
-
-        const voice = pickVoice();
-        if (voice) utterance.voice = voice;
-
-        utterance.onstart = () => {
-          speakingRef.current = true;
-          callbacks?.onStart?.();
-        };
-
-        const cleanGlobalRef = () => {
-          if (typeof window !== 'undefined' && (window as any)._activeUtterances) {
-            (window as any)._activeUtterances = (window as any)._activeUtterances.filter(
-              (u: any) => u !== utterance
-            );
-          }
-        };
-
-        utterance.onend = () => {
-          cleanGlobalRef();
-          finish('end');
-        };
-        utterance.onerror = (e) => {
-          console.error("SpeechSynthesis utterance error:", e);
-          cleanGlobalRef();
-          finish('error');
-        };
-
-        // Keep-alive to prevent Chrome from pausing
-        const resumeId = window.setInterval(() => {
-          window.speechSynthesis.resume();
-        }, 100);
-        timersRef.current.push(resumeId);
-
-        // Safety timeout
-        const estimatedMs = Math.min(300000, Math.max(10000, spokenText.length * 150));
-        const timeoutId = window.setTimeout(() => {
-          cleanGlobalRef();
-          finish('end');
-        }, estimatedMs);
-        timersRef.current.push(timeoutId);
-
-        window.speechSynthesis.speak(utterance);
-        window.speechSynthesis.resume();
+        speakingRef.current = false;
+        callbacks?.onEnd?.();
+        resolve();
       };
 
       void run();

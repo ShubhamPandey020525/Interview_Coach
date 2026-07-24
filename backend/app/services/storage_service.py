@@ -14,7 +14,6 @@ ALLOWED_RESUME_TYPES = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
 }
 ALLOWED_AUDIO_TYPES = {"audio/webm", "audio/wav", "audio/mpeg", "audio/ogg", "audio/mp4"}
-ALLOWED_VIDEO_TYPES = {"video/webm", "video/mp4", "video/ogg"}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
 
@@ -24,7 +23,7 @@ class StorageService:
         self._ensure_dirs()
 
     def _ensure_dirs(self) -> None:
-        for subdir in ("resumes", "audio", "video", "tts"):
+        for subdir in ("resumes", "audio", "tts"):
             (self.media_root / subdir).mkdir(parents=True, exist_ok=True)
 
 
@@ -33,9 +32,6 @@ class StorageService:
 
     async def save_audio(self, file: UploadFile) -> str:
         return await self._save_file(file, "audio", ALLOWED_AUDIO_TYPES, strict_type=False)
-
-    async def save_video(self, file: UploadFile) -> str:
-        return await self._save_file(file, "video", ALLOWED_VIDEO_TYPES, strict_type=False)
 
     async def _save_file(
         self,

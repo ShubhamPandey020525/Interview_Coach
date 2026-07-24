@@ -71,10 +71,18 @@ class TTSService:
             logger.info("Generated Edge-TTS audio for attempt %s using voice %s", attempt_id, voice)
             return relative_path
         except Exception as e:
-            logger.warning("Edge-TTS audio generation failed for attempt %s: %s", attempt_id, e)
-            if output_file.exists():
-                try:
-                    output_file.unlink()
-                except Exception:
-                    pass
-            return None
+            logger.warning("Edge-TTS audio generation failed for attempt %s: %s. Trying gTTS fallback...", attempt_id, e)
+            try:
+                from gtts import gTTS
+                tts = gTTS(text=spoken_text, lang="en")
+                tts.save(str(output_file))
+                logger.info("Generated gTTS fallback audio for attempt %s", attempt_id)
+                return relative_path
+            except Exception as fallback_err:
+                logger.error("gTTS fallback audio generation failed for attempt %s: %s", attempt_id, fallback_err)
+                if output_file.exists():
+                    try:
+                        output_file.unlink()
+                    except Exception:
+                        pass
+                return None

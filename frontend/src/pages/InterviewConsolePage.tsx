@@ -64,7 +64,6 @@ export default function InterviewConsolePage() {
   const questionNumberRef = useRef(0);
 
   const submitPendingRef = useRef(false);
-  const pendingAnswerTextRef = useRef('');
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
 
   const stopAudioPlayback = useCallback(() => {
@@ -106,15 +105,20 @@ export default function InterviewConsolePage() {
 
       attemptRef.current = attemptId;
 
-      // Stop any existing audio
-      stopAudioPlayback();
-      audio.releaseMicForSpeech();
-
       const speechText = formatQuestionDisplay(rawText);
       const targetPath = audioUrl || `/media/tts/${attemptId}.mp3`;
       const cleanPath = targetPath.startsWith('/') ? targetPath : `/${targetPath}`;
       const backendOrigin = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
       const fullBackendUrl = `${backendOrigin.replace(/\/$/, '')}${cleanPath}`;
+
+      // If currently playing the exact same audio, let it continue uninterrupted
+      if (audioElementRef.current && audioElementRef.current.src === fullBackendUrl && !audioElementRef.current.paused) {
+        return;
+      }
+
+      // Stop any existing audio
+      stopAudioPlayback();
+      audio.releaseMicForSpeech();
 
       const fallbackToSpeech = () => {
         speak(speechText, {
@@ -205,78 +209,68 @@ export default function InterviewConsolePage() {
   }, [stopAudioPlayback, audio, recognition]);
 
 
-  const performSubmit = useCallback(async (blob: Blob | null) => {
-    const attemptId = attemptRef.current;
-    if (!sessionId || !attemptId) return;
+  const performSubmit = useCallback(
+    async (blob: Blob | null, textArg?: string) => {
+      const attemptId = attemptRef.current;
+      if (!sessionId || !attemptId) return;
 
-    try {
-      const answerText = pendingAnswerTextRef.current;
-      if (blob) {
-        await submitAnswer(sessionId, attemptId, answerText, blob);
-      } else if (answerText) {
-        await submitAnswer(sessionId, attemptId, answerText);
-      } else {
-        await submitAnswer(sessionId, attemptId, SKIP_ANSWER_TEXT);
-      }
-      addLine({ role: 'candidate', text: answerText || 'Answer submitted', meta: blob ? 'Audio' : 'Text' });
-      
-      audio.reset();
-      setUserTranscript('');
+      try {
+        const answerText = (textArg !== undefined ? textArg : userTranscript).trim();
 
-      if (questionNumberRef.current >= MAX_QUESTIONS) {
+        if (blob && blob.size > 0) {
+          await submitAnswer(sessionId, attemptId, answerText, blob);
+        } else if (answerText) {
+          await submitAnswer(sessionId, attemptId, answerText);
+        } else {
+          await submitAnswer(sessionId, attemptId, SKIP_ANSWER_TEXT);
+        }
+
+        const displayLabel = answerText || (blob && blob.size > 0 ? '🎤 Spoken Audio Recorded (Transcribing...)' : SKIP_ANSWER_TEXT);
+        addLine({ role: 'candidate', text: displayLabel, meta: blob ? 'Audio' : 'Text' });
+
+        audio.reset();
+        setUserTranscript('');
+
+        if (questionNumberRef.current >= MAX_QUESTIONS) {
+          setPhase('idle');
+          setIsLastQuestionAnswered(true);
+        } else {
+          setPhase('idle');
+        }
+      } catch (err) {
+        setErrorMessage(getErrorMessage(err));
         setPhase('idle');
-        setIsLastQuestionAnswered(true);
-      } else {
-        setPhase('idle');
+      } finally {
+        submittingRef.current = false;
+        submitPendingRef.current = false;
       }
-    } catch (err) {
-      setErrorMessage(getErrorMessage(err));
-      setPhase('listening');
-    } finally {
-      submittingRef.current = false;
-      submitPendingRef.current = false;
-    }
-  }, [sessionId, addLine, audio]);
-
-  // Effect to wait for audioBlob to be ready if submit was clicked during recording
-  useEffect(() => {
-    if (submitPendingRef.current && audio.audioBlob) {
-      void performSubmit(audio.audioBlob);
-    }
-  }, [audio.audioBlob, performSubmit]);
+    },
+    [sessionId, userTranscript, addLine, audio]
+  );
 
   const handleSubmitAnswer = useCallback(async () => {
     const attemptId = attemptRef.current;
     const currentPhase = phaseRef.current;
     const isValidPhase = currentPhase === 'listening' || currentPhase === 'idle' || currentPhase === 'speaking';
-    
+
     if (!sessionId || !attemptId || submittingRef.current || !isValidPhase) return;
 
     submittingRef.current = true;
     setPhase('submitting');
 
-    const answerText = userTranscript || recognition.liveText || '';
-    pendingAnswerTextRef.current = answerText;
+    const answerText = userTranscript.trim();
 
+    let recordedBlob: Blob | null = null;
     if (audio.isRecording) {
-      submitPendingRef.current = true;
-      audio.stopRecording();
       try {
-        recognition.stopListening();
+        recordedBlob = await audio.stopRecording();
       } catch {}
-      
-      // Safety timeout: if blob doesn't arrive in 800ms, submit text-only
-      window.setTimeout(() => {
-        if (submitPendingRef.current) {
-          void performSubmit(null);
-        }
-      }, 800);
-    } else {
-      try {
-        recognition.stopListening();
-      } catch {}
-      void performSubmit(null);
     }
+    try {
+      recognition.stopListening();
+    } catch {}
+
+    await performSubmit(recordedBlob, answerText);
   }, [sessionId, userTranscript, audio, recognition, performSubmit]);
 
   const handleEndInterview = useCallback(async () => {
@@ -327,8 +321,9 @@ export default function InterviewConsolePage() {
       audio.releaseMicForSpeech();
     }
 
-    questionNumberRef.current += 1;
-    setQuestionNumber(questionNumberRef.current);
+    const seqNum = (currentQuestion as any).sequence_number || (questionNumberRef.current ? questionNumberRef.current + 1 : 1);
+    questionNumberRef.current = seqNum;
+    setQuestionNumber(seqNum);
     deliverQuestion(
       currentQuestion.attempt_id,
       currentQuestion.question_text,
@@ -341,15 +336,14 @@ export default function InterviewConsolePage() {
   useEffect(() => {
     if (!lastEvaluation) return;
 
-    if (lastEvaluation.transcript) {
+    if (lastEvaluation.transcript && lastEvaluation.transcript !== 'No answer response was provided.') {
       setLines((prev) => {
         const nextLines = [...prev];
         for (let i = nextLines.length - 1; i >= 0; i--) {
           if (nextLines[i].role === 'candidate') {
             nextLines[i] = {
               ...nextLines[i],
-              text: lastEvaluation.transcript || 'No speech captured.'
-
+              text: lastEvaluation.transcript || 'No speech captured.',
             };
             break;
           }
@@ -586,10 +580,10 @@ export default function InterviewConsolePage() {
                     <>
                       <button
                         onClick={handleSubmitAnswer}
-                        className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 px-6 py-2.5 text-xs font-black text-white shadow-md shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer"
+                        className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 px-6 py-2.5 text-xs font-black text-white shadow-md shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer animate-pulse flex items-center gap-1.5"
                         disabled={submittingRef.current}
                       >
-                        Submit Answer ➔
+                        <span>⏹️ Stop &amp; Submit Answer ➔</span>
                       </button>
                       <button
                         onClick={() => {
@@ -604,6 +598,13 @@ export default function InterviewConsolePage() {
                         Cancel
                       </button>
                     </>
+                  )}
+
+                  {(phase === 'submitting' || phase === 'thinking') && (
+                    <div className="flex items-center gap-2 rounded-xl bg-teal-50 border border-teal-200 px-5 py-2.5 text-xs font-black text-teal-900 animate-pulse shadow-sm">
+                      <div className="w-3.5 h-3.5 rounded-full border-2 border-teal-600 border-t-transparent animate-spin" />
+                      <span>Transcribing &amp; Evaluating Answer...</span>
+                    </div>
                   )}
 
                   {(phase === 'thinking' || phase === 'submitting') && (

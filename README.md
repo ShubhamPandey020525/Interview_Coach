@@ -1,6 +1,6 @@
 # 🤖 AI Technical Interview Coach
 
-An enterprise-grade, full-stack, AI-powered mock interview simulator designed to conduct real-time, adaptive technical and behavioral interviews. Powered by an 8-agent **LangGraph** orchestration system, the platform parses candidate resumes, dynamically generates context-grounded interview questions, evaluates text and multimodal responses (audio/video), and produces granular performance analytics and personalized learning paths.
+An enterprise-grade, full-stack, AI-powered mock interview simulator designed to conduct real-time, adaptive technical and behavioral interviews. Powered by a multi-agent **LangGraph** orchestration system, the platform parses candidate resumes, dynamically generates context-grounded interview questions, evaluates text and audio responses, and produces granular performance analytics and personalized learning paths.
 
 ---
 
@@ -8,19 +8,19 @@ An enterprise-grade, full-stack, AI-powered mock interview simulator designed to
 
 - [🤖 AI Technical Interview Coach](#-ai-technical-interview-coach)
   - [📋 Table of Contents](#-table-of-contents)
+  - [📸 Application Screenshots](#-application-screenshots)
   - [🌟 Key System Capabilities](#-key-system-capabilities)
   - [🧠 AI \& Multi-Agent Architecture (LangGraph)](#-ai--multi-agent-architecture-langgraph)
-    - [The 8 Specialized AI Agents](#the-8-specialized-ai-agents)
+    - [The 7 Specialized AI Agents](#the-7-specialized-ai-agents)
     - [LangGraph Workflow Diagram](#langgraph-workflow-diagram)
     - [State Management \& Dynamic Routing](#state-management--dynamic-routing)
   - [🧰 AI \& Media Technology Stack Breakdown](#-ai--media-technology-stack-breakdown)
     - [1. Multi-Agent Orchestration](#1-multi-agent-orchestration)
     - [2. Speech-to-Text (Audio-to-Text)](#2-speech-to-text-audio-to-text)
     - [3. Text-to-Speech (Text-to-Audio)](#3-text-to-speech-text-to-audio)
-    - [4. Computer Vision \& Video Analytics](#4-computer-vision--video-analytics)
-    - [5. Audio Analytics \& Speech Metrics Engine](#5-audio-analytics--speech-metrics-engine)
-    - [6. Document Parsing \& Resume Intelligence](#6-document-parsing--resume-intelligence)
-    - [7. LLM Provider Infrastructure](#7-llm-provider-infrastructure)
+    - [4. Audio Analytics \& Speech Metrics Engine](#4-audio-analytics--speech-metrics-engine)
+    - [5. Document Parsing \& Resume Intelligence](#5-document-parsing--resume-intelligence)
+    - [6. LLM Provider Infrastructure](#6-llm-provider-infrastructure)
   - [⚡ Dual-Path Communication Architecture](#-dual-path-communication-architecture)
     - [Path 1: WebSockets (`/api/ws/{session_id}`)](#path-1-websockets-apiwssession_id)
     - [Path 2: REST Media Endpoint (`/api/sessions/{session_id}/media`)](#path-2-rest-media-endpoint-apisessionssession_idmedia)
@@ -49,6 +49,27 @@ An enterprise-grade, full-stack, AI-powered mock interview simulator designed to
 
 ---
 
+## 📸 Application Screenshots
+
+Here is the step-by-step visual demonstration of the AI Technical Interview Coach platform:
+
+### 1. Landing & Resume Upload
+![Resume Upload & Candidate Profile Setup](proofs/1.png)
+
+### 2. Candidate Dashboard & Session Creation
+![Candidate Dashboard & Role Selection](proofs/2.png)
+
+### 3. Real-Time AI Interview Console
+![Real-Time Adaptive AI Interview Console](proofs/3.png)
+
+### 4. Answer Evaluation & Live Feedback
+![Evaluation Feedback & Metric Scoring](proofs/4.png)
+
+### 5. Session Analytics & Customized Learning Plan
+![Session Report & Personal Learning Plan](proofs/5.png)
+
+---
+
 ## 🌟 Key System Capabilities
 
 ### 📄 1. Zero-Generic Resume Grounding
@@ -60,15 +81,14 @@ An enterprise-grade, full-stack, AI-powered mock interview simulator designed to
 - **Intelligent Probing**: Triggers a dedicated **Follow-up Agent** whenever a candidate scores below **65/100** or completes a project-based question, testing deep technical mastery rather than surface memorization.
 - **Diverse Question Framing**: Cycles through 6 distinct question angles: *Concept Definition*, *Applied Experience*, *Comparison & Trade-offs*, *Problem Solving*, *Deep Mechanism*, and *Limitation / Edge Cases*.
 
-### 🎙️ 3. Real-Time Multimodal Evaluation (Audio & Video)
-- **Automatic Speech Recognition (ASR)**: Uses OpenAI Whisper to transcribe spoken responses into text.
-- **Neural Voice Synthesis (TTS)**: Leverages Edge-TTS with multi-persona voice assignments to speak questions aloud with natural inflection.
+### 🎙️ 3. Real-Time Multimodal Evaluation (Audio & Voice)
+- **Automatic Speech Recognition (ASR)**: Uses OpenAI Whisper / Local Faster-Whisper to transcribe spoken responses into text.
+- **Neural Voice Synthesis (TTS)**: Leverages Edge-TTS with multi-persona voice assignments (`JennyNeural`, `ChristopherNeural`, `EricNeural`) to speak questions aloud with natural inflection.
 - **Audio Prosody & Communication Metrics**: Calculates Words Per Minute (WPM) speech pace, counts filler words (`um`, `uh`, `like`, `you know`, `basically`, `actually`, `so`), and grades communication clarity & confidence.
-- **Computer Vision (OpenCV + MediaPipe)**: Samples camera video frames to compute face detection ratio, eye-contact proxy tracking, posture jitter stability, and overall visual engagement.
 
 ### 📊 4. Interactive Analytics & Custom Learning Paths
 - **Live WebSocket Feedback Loop**: Instant server-to-client push of turn evaluation, raw score, reasoning, filler word breakdown, and reference model answer.
-- **Post-Interview Session Report**: Comprehensive report with technical vs. communication score radar, attempt breakdown, and video engagement scores.
+- **Post-Interview Session Report**: Comprehensive report with technical vs. communication score breakdown and attempt timelines.
 - **Automated Learning Plan**: Generates targeted study resources and external links focused specifically on weak areas identified during the session.
 
 ---
@@ -77,7 +97,7 @@ An enterprise-grade, full-stack, AI-powered mock interview simulator designed to
 
 The platform's decision-making core is constructed with **LangGraph (`StateGraph`)** coupled with an in-memory `MemorySaver` checkpointer and an in-process state cache (`_session_states`).
 
-### The 8 Specialized AI Agents
+### The 7 Specialized AI Agents
 
 | Agent Name | Source File | Core Responsibility & Functionality |
 | :--- | :--- | :--- |
@@ -89,10 +109,9 @@ The platform's decision-making core is constructed with **LangGraph (`StateGraph
 | **Resume Parser Agent** | `backend/app/agents/resume_agent.py` | Runs at session startup. Analyzes raw resume text to structure candidate skills, subtopic maps, project details, and experience summaries. |
 | **Learning Agent** | `backend/app/agents/learning_agent.py` | Executed upon interview completion (10 questions max). Aggregates scores, extracts weak areas, and builds a customized learning plan with study links. |
 | **Audio Analysis Agent** | `backend/app/agents/audio_analysis_agent.py` | Operates asynchronously off the conversational hot-path to process audio metrics (pace WPM, filler word count, clarity score, confidence score). |
-| **Video Analysis Agent** | `backend/app/agents/video_analysis_agent.py` | Operates asynchronously off the conversational hot-path to compute visual metrics (face detection, eye-contact estimation, posture jitter, engagement score). |
 
 > [!NOTE]
-> All 8 agents are registered in `AGENT_REGISTRY` (`backend/app/agents/graph.py`) per the system design specification.
+> All specialized agents are registered in `AGENT_REGISTRY` (`backend/app/agents/graph.py`).
 
 ### LangGraph Workflow Diagram
 
@@ -111,9 +130,8 @@ graph TD
     
     I -->|Text Response| J[LLM Answer Evaluator: Score & Reasoning]
     I -->|Audio Upload| K[Audio Analysis Agent: Whisper STT, WPM, Filler Words]
-    I -->|Video Upload| L[Video Analysis Agent: MediaPipe CV, Posture, Eye Contact]
     
-    K & L --> J
+    K --> J
     J --> C
     H --> M[Interview Completed / Report Generated]
 ```

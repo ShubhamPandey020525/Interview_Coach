@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { EvaluationSignal, WsQuestionPayload } from '../api/types';
 
-type RecordingMode = 'text' | 'audio' | 'video';
+type RecordingMode = 'text' | 'audio';
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'reconnecting';
 
 interface InterviewState {

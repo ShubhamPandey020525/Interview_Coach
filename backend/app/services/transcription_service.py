@@ -50,7 +50,18 @@ class TranscriptionService:
             try:
 
                 def _run_transcribe() -> str:
-                    segments, _info = model.transcribe(audio_path, beam_size=5)
+                    initial_prompt = (
+                        "Indian English software engineering candidate response during a technical interview. "
+                        "Tech keywords: Python, FastAPI, React, JavaScript, SQL, Database, API, Async, Docker, "
+                        "Data Structures, Algorithms, System Design, Machine Learning."
+                    )
+                    segments, _info = model.transcribe(
+                        audio_path,
+                        language="en",
+                        initial_prompt=initial_prompt,
+                        beam_size=5,
+                        vad_filter=True,
+                    )
                     return " ".join(segment.text for segment in segments).strip()
 
                 transcript = await asyncio.to_thread(_run_transcribe)
@@ -70,7 +81,11 @@ class TranscriptionService:
                     response = await client.audio.transcriptions.create(
                         model="whisper-1",
                         file=audio_file,
-                        prompt="Um, uh, er, like, you know, basically, actually, so... this is a candidate response with filler words.",
+                        prompt=(
+                            "Indian English candidate technical interview response with tech terms: "
+                            "Python, FastAPI, React, SQL, API, Async, System Design, Data Structures."
+                        ),
+                        language="en",
                     )
                 return response.text
             except Exception as e:

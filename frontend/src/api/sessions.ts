@@ -33,14 +33,12 @@ export async function submitAnswer(
   sessionId: string,
   attemptId: string,
   answerText?: string,
-  audio?: Blob,
-  video?: Blob
+  audio?: Blob
 ): Promise<AnswerResponse> {
   const form = new FormData();
   form.append('attempt_id', attemptId);
   if (answerText) form.append('answer_text', answerText);
   if (audio) form.append('audio', audio, 'recording.webm');
-  if (video) form.append('video', video, 'recording.webm');
   const res = await api.post<AnswerResponse>(`/api/sessions/${sessionId}/answer`, form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
