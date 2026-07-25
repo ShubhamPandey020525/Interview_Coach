@@ -14,16 +14,16 @@ The AI Technical Interview Coach simulates real-world job interviews. Instead of
 
 The core engine is powered by **LangGraph** with 8 specialized AI agents working together:
 
-| # | Agent Name | File | Role & Responsibility |
-|---|---|---|---|
-| **1** | **Orchestrator Agent** | [`orchestrator.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/orchestrator.py) | **Interview Supervisor & Planner**. Manages state transitions, tracks question limits, and decides which agent should handle the next turn (e.g. Technical, Follow-up, Scenario, or Learning). |
-| **2** | **Resume Agent** | [`resume_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/resume_agent.py) | **Context Initializer**. Parses PDF/DOCX resumes at session startup, extracting candidate skills, tech stack keywords, and project details so all questions stay grounded in candidate experience. |
-| **3** | **Technical Agent** | [`technical_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/technical_agent.py) | **Technical Examiner**. Generates role-specific coding, system design, and computer science questions matched to the candidate's target role and resume skills. |
-| **4** | **Follow-up Agent** | [`followup_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/followup_agent.py) | **Deep Probe Specialist**. Automatically triggered when a candidate's answer score is below 65% or incomplete. Probes deeper into weak technical areas to test true comprehension. |
-| **5** | **Scenario Agent** | [`scenario_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/scenario_agent.py) | **System Architecture & Situational Specialist**. Asks open-ended production trade-off, architectural design, and practical problem-solving scenarios based on the resume tech stack. |
-| **6** | **Personality Agent** | [`personality_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/personality_agent.py) | **Behavioral & HR Specialist**. Asks questions about past project challenges, team collaboration, leadership experience, and soft skills. |
-| **7** | **Learning Agent** | [`learning_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/learning_agent.py) | **Post-Interview Coach**. Runs when the interview completes (max questions reached). Synthesizes candidate scores and resume skill gaps to generate a personalized learning plan. |
-| **8** | **Audio Analysis Agent** | [`audio_analysis_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/audio_analysis_agent.py) | **Voice & Speech Analyst**. Processes recorded candidate voice responses off the main thread. Measures Speech Pace (WPM), counts filler words (`um`, `uh`, `like`), and computes clarity/confidence scores. |
+| # | Agent Name | File | Type | Role & Responsibility |
+|---|---|---|---|---|
+| **1** | **Orchestrator Agent** | [`orchestrator.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/orchestrator.py) | Logic | **Interview Supervisor & Planner**. Manages state transitions, tracks question limits, and decides which agent should handle the next turn (e.g. Technical, Follow-up, Scenario, or Learning). |
+| **2** | **Resume Agent** | [`resume_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/resume_agent.py) | LLM | **Context Initializer**. Parses PDF/DOCX resumes at session startup, extracting candidate skills, tech stack keywords, and project details so all questions stay grounded in candidate experience. |
+| **3** | **Technical Agent** | [`technical_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/technical_agent.py) | LLM | **Technical Examiner**. Generates role-specific coding, system design, and computer science questions matched to the candidate's target role and resume skills. |
+| **4** | **Follow-up Agent** | [`followup_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/followup_agent.py) | LLM | **Deep Probe Specialist**. Automatically triggered when a candidate's answer score is below 65% or incomplete. Probes deeper into weak technical areas to test true comprehension. |
+| **5** | **Scenario Agent** | [`scenario_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/scenario_agent.py) | LLM | **System Architecture & Situational Specialist**. Asks open-ended production trade-off, architectural design, and practical problem-solving scenarios based on the resume tech stack. |
+| **6** | **Personality Agent** | [`personality_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/personality_agent.py) | LLM | **Behavioral & HR Specialist**. Asks questions about past project challenges, team collaboration, leadership experience, and soft skills. |
+| **7** | **Learning Agent** | [`learning_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/learning_agent.py) | LLM | **Post-Interview Coach**. Runs when the interview completes (max questions reached). Synthesizes candidate scores and resume skill gaps to generate a personalized learning plan. |
+| **8** | **Audio Analysis Agent** | [`audio_analysis_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/audio_analysis_agent.py) | Engine | **Voice & Speech Analyst**. Processes recorded candidate voice responses off the main thread. Measures Speech Pace (WPM), counts filler words (`um`, `uh`, `like`), and computes clarity/confidence scores. |
 
 ---
 
@@ -53,13 +53,30 @@ flowchart TD
 
 ---
 
-## 🤖 Agent LLM Prompt Templates (Step-by-Step Series)
+## ⚙️ How Each Agent Operates (LLM Prompts vs Non-LLM Logic)
 
-Here is how each agent constructs its specific prompt to communicate with the LLM across the interview lifecycle:
+---
 
-### Step 1: Resume Agent (`resume_agent.py`)
-- **Role**: Parses raw uploaded resume text to extract skills and project subtopics.
-- **LLM Prompt Structure**:
+### 🟢 Non-LLM Agents (State Logic & Audio Engine)
+
+#### 1. Orchestrator Agent (`orchestrator.py`) — *State Machine Logic*
+- **Mechanism**: Operates using deterministic Python state logic (no LLM calls required).
+- **Operation**: Evaluates current `question_count` and recent score. If `question_count >= 10`, it routes to the **Learning Agent**; if previous score `< 65`, it routes to the **Follow-up Agent**; otherwise, it cycles through **Technical**, **Scenario**, and **Personality** stages based on the planned question sequence.
+
+#### 2. Audio Analysis Agent (`audio_analysis_agent.py`) — *Whisper STT & Audio Math*
+- **Mechanism**: Runs speech processing off the main conversational thread using local models (no LLM calls).
+- **Operation**:
+  - Uses local **OpenAI Whisper STT** (`faster-whisper` C++ engine) to transcribe `.webm` voice audio into text.
+  - Computes Speech Pace in Words Per Minute (`WPM = word_count / duration_minutes`).
+  - Matches spoken words against filler vocabulary (`um`, `uh`, `like`, `you know`, `basically`) to calculate filler count and communication clarity.
+
+---
+
+### 🤖 LLM-Powered Agents (Prompts Sent to LLM)
+
+#### 1. Resume Agent (`resume_agent.py`)
+- **Role**: Parses raw uploaded resume text into structured skills and project subtopics.
+- **LLM Prompt**:
   ```python
   prompt = f"""
   Extract ONLY what is explicitly stated in this resume text. Do not invent skills.
@@ -71,15 +88,9 @@ Here is how each agent constructs its specific prompt to communicate with the LL
 
 ---
 
-### Step 2: Orchestrator Agent (`orchestrator.py`)
-- **Role**: Evaluates turn history, question limits (10 max), and recent answer scores to decide the next stage.
-- **Planner State Logic**: Checks `if current_stage == "complete" or question_count >= max_questions` to route to `learning`. If previous score `< 65`, routes to `followup`. Otherwise routes to `technical`, `scenario`, or `personality`.
-
----
-
-### Step 3: Technical Agent (`technical_agent.py`)
+#### 2. Technical Agent (`technical_agent.py`)
 - **Role**: Generates role-relevant technical interview questions grounded in candidate resume skills.
-- **LLM Prompt Structure**:
+- **LLM Prompt**:
   ```python
   prompt = f"""
   You are a senior technical interviewer for a {target_role} role.
@@ -93,9 +104,9 @@ Here is how each agent constructs its specific prompt to communicate with the LL
 
 ---
 
-### Step 4: Follow-up Agent (`followup_agent.py`)
+#### 3. Follow-up Agent (`followup_agent.py`)
 - **Role**: Triggered automatically when the candidate's previous score is `< 65/100`.
-- **LLM Prompt Structure**:
+- **LLM Prompt**:
   ```python
   prompt = f"""
   You are a senior technical interviewer for a {target_role} role.
@@ -110,9 +121,9 @@ Here is how each agent constructs its specific prompt to communicate with the LL
 
 ---
 
-### Step 5: Scenario Agent (`scenario_agent.py`)
+#### 4. Scenario Agent (`scenario_agent.py`)
 - **Role**: Generates open-ended system design and production trade-off scenario questions.
-- **LLM Prompt Structure**:
+- **LLM Prompt**:
   ```python
   prompt = f"""
   Generate an open-ended system design or production scenario question for a {target_role}.
@@ -124,9 +135,9 @@ Here is how each agent constructs its specific prompt to communicate with the LL
 
 ---
 
-### Step 6: Personality Agent (`personality_agent.py`)
+#### 5. Personality Agent (`personality_agent.py`)
 - **Role**: Generates soft skills, teamwork, and past project challenge questions.
-- **LLM Prompt Structure**:
+- **LLM Prompt**:
   ```python
   prompt = f"""
   Generate a behavioral / soft skills interview question for a {target_role}.
@@ -138,17 +149,9 @@ Here is how each agent constructs its specific prompt to communicate with the LL
 
 ---
 
-### Step 7: Audio Analysis Agent (`audio_analysis_agent.py`)
-- **Role**: Processes candidate voice recordings off the main thread.
-- **Processing Engine**:
-  - Uses local **OpenAI Whisper STT** (`faster-whisper` C++ engine) to transcribe speech to text.
-  - Calculates Speech Pace (WPM) and counts filler words (`um`, `uh`, `like`, `you know`, `basically`).
-
----
-
-### Step 8: Answer Evaluator (LLM Scoring Rubric)
+#### 6. Answer Evaluator (LLM Scoring Rubric)
 - **Role**: Evaluates candidate answer quality after each turn.
-- **LLM Prompt Structure**:
+- **LLM Prompt**:
   ```python
   prompt = f"""
   Evaluate this {agent_type} interview answer thoroughly.
@@ -161,9 +164,9 @@ Here is how each agent constructs its specific prompt to communicate with the LL
 
 ---
 
-### Step 9: Learning Agent (`learning_agent.py`)
+#### 7. Learning Agent (`learning_agent.py`)
 - **Role**: Runs when 10 questions are completed to build a personalized study plan.
-- **LLM Prompt Structure**:
+- **LLM Prompt**:
   ```python
   prompt = f"""
   Create a personalized learning plan for a {target_role} candidate.
