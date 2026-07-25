@@ -1,12 +1,6 @@
 # 🤖 AI Technical Interview Coach
 
-An AI-powered mock interview system built with **FastAPI**, **React**, and **LangGraph**. The platform uses 8 AI agents to read candidate resumes, ask role-specific technical and behavioral questions, grade typed or spoken answers, and create personalized learning plans.
-
----
-
-## 🌟 Overview
-
-The AI Technical Interview Coach creates realistic mock interviews. Instead of asking random questions, it reads your resume to ask questions about your actual skills and projects. It adjusts question difficulty based on your performance, asks follow-up questions when an answer is weak, and gives detailed feedback on your score, speech speed, and filler words.
+The **AI Technical Interview Coach** is a real-world mock interview platform built with **FastAPI**, **React**, and **LangGraph**. Powered by 8 specialized AI agents, it reads candidate resumes to ask grounded technical and behavioral questions, evaluates typed or spoken answers with speech pace and filler word analytics, and delivers personalized learning plans.
 
 ---
 
