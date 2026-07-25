@@ -41,7 +41,7 @@ flowchart TD
     
     Tech & Followup & Scenario & Personality --> CandidateAnswer[Candidate Responds via Text / Voice]
     
-    CandidateAnswer -->|Audio Recording| AudioAgent[Audio Analysis Agent: Whisper Speech-to-Text & WPM/Filler Metrics]
+    CandidateAnswer -->|Audio Recording| AudioAgent[Audio Analysis Agent: OpenAI Whisper STT & WPM/Filler Metrics]
     CandidateAnswer -->|Text Answer| LLMEval[LLM Answer Evaluator: Score, Reasoning & Comparison]
     
     AudioAgent --> LLMEval
@@ -73,9 +73,9 @@ Candidates can respond using either **typed text** or **spoken voice**:
   - Candidate types their response directly into the console.
   - The answer string is sent to the backend and evaluated by the LLM against scoring rubrics (Score 0-100, Reasoning, Model Answer, Comparison).
 
-- **🎙️ Spoken Audio Input (Speech-to-Text via Whisper)**:
+- **🎙️ Spoken Audio Input (OpenAI Whisper Speech-to-Text via `faster-whisper`)**:
   - Candidate speaks their response into the microphone, recorded as a `.webm` audio file.
-  - **Whisper Speech-to-Text (STT)** (`faster-whisper`) transcribes the spoken audio into an exact text transcript.
+  - **OpenAI Whisper STT** (executed locally using the C++ `faster-whisper` engine) transcribes the spoken audio into an exact text transcript with zero external API token costs.
   - **Audio Analytics Engine** computes Speech Pace in Words Per Minute (WPM) and detects filler words (`um`, `uh`, `like`, `you know`, `basically`).
   - The transcribed text is sent to the LLM for technical evaluation, and combined scores (technical accuracy + speech clarity + filler word ratio) are returned to the candidate interface.
 
@@ -93,7 +93,7 @@ Once 10 questions are completed, the Orchestrator marks the interview complete a
 
 ## 🛠️ Technology Stack
 
-- **Backend**: Python 3.11, FastAPI, LangGraph, OpenAI / Gemini LLM API, Faster-Whisper (STT), Edge-TTS (TTS), OpenCV & MediaPipe (Computer Vision).
+- **Backend**: Python 3.11, FastAPI, LangGraph, OpenAI / Gemini LLM API, OpenAI Whisper STT (`faster-whisper`), Edge-TTS (TTS), OpenCV & MediaPipe (Computer Vision).
 - **Frontend**: React 19, Vite, TypeScript, Tailwind CSS v4, Zustand (State Management), TanStack React Query, Recharts (Analytics Charts).
 - **Data & Storage**: In-Memory Transient Store (`app/store.py`), zero database installation required.
 
