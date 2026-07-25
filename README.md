@@ -29,8 +29,6 @@ The core engine is powered by **LangGraph** with 8 specialized AI agents working
 
 ## 🔄 Sequential Multi-Agent Execution Flow
 
-The diagram below shows how candidate interactions move sequentially through each of the 8 agents:
-
 ```mermaid
 flowchart TD
     Start([1. Candidate Starts Session]) --> Resume[Step 1: Resume Agent - Extract Skills & Projects]
@@ -55,71 +53,127 @@ flowchart TD
 
 ---
 
-## ⚙️ How Each Agent Communicates & Generates Responses
+## 🤖 Agent LLM Prompt Templates (Step-by-Step Series)
 
-Below is the step-by-step breakdown of how each agent processes state and communicates with the LLM or AI engines:
+Here is how each agent constructs its specific prompt to communicate with the LLM across the interview lifecycle:
 
 ### Step 1: Resume Agent (`resume_agent.py`)
-- **Trigger**: Executed once when the interview session is created.
-- **Input**: Raw text extracted from uploaded PDF/DOCX resumes.
-- **LLM Communication**: Sends raw text to the LLM to extract structured candidate skills, tech stack keywords, and project summaries.
-- **Output**: Seeds `resume_context` into session state so all future questions reference candidate experience.
+- **Role**: Parses raw uploaded resume text to extract skills and project subtopics.
+- **LLM Prompt Structure**:
+  ```python
+  prompt = f"""
+  Extract ONLY what is explicitly stated in this resume text. Do not invent skills.
+  For each extracted skill, generate 5-8 core technical subtopics.
+  Raw Resume Text: {raw_text}
+  Return JSON: {{"skills": [...], "projects": [...], "experience_summary": "...", "skill_subtopics": {{...}}}}
+  """
+  ```
 
 ---
 
 ### Step 2: Orchestrator Agent (`orchestrator.py`)
-- **Trigger**: Executed before every single question turn.
-- **Input**: Current session state, turn history, question sequence index, and candidate score history.
-- **Routing Logic**: Evaluates if `question_count >= 10` or `current_stage == "complete"`. If complete, routes to **Learning Agent**; if previous score `< 65`, routes to **Follow-up Agent**; otherwise routes to **Technical**, **Scenario**, or **Personality** agents based on planned sequence.
+- **Role**: Evaluates turn history, question limits (10 max), and recent answer scores to decide the next stage.
+- **Planner State Logic**: Checks `if current_stage == "complete" or question_count >= max_questions` to route to `learning`. If previous score `< 65`, routes to `followup`. Otherwise routes to `technical`, `scenario`, or `personality`.
 
 ---
 
 ### Step 3: Technical Agent (`technical_agent.py`)
-- **Trigger**: Routed by Orchestrator for technical turns.
-- **Input**: Candidate target role, resume skills, subtopic mapping, and conversation history.
-- **LLM Communication**: Prompts the LLM to generate a role-relevant technical question matching candidate skills.
-- **Output**: Appends new assistant question to conversation history and increments question count.
+- **Role**: Generates role-relevant technical interview questions grounded in candidate resume skills.
+- **LLM Prompt Structure**:
+  ```python
+  prompt = f"""
+  You are a senior technical interviewer for a {target_role} role.
+  ASSIGNMENT: Ask a technical question on specific topic: '{topic}' with angle: '{angle}'.
+  Question Type: {question_type}
+  Candidate Resume Context: {json.dumps(resume_context)}
+  Conversation History: {json.dumps(conversation_history[-4:])}
+  Return JSON: {{"question": "your single resume-specific question here"}}
+  """
+  ```
 
 ---
 
 ### Step 4: Follow-up Agent (`followup_agent.py`)
-- **Trigger**: Routed by Orchestrator when candidate's previous score is low (`< 65/100`).
-- **Input**: Previous question text, weak candidate answer, and LLM reasoning evaluation.
-- **LLM Communication**: Prompts the LLM to generate a deep-dive follow-up probe targeting the specific weakness.
-- **Output**: Updates state with follow-up depth counter and probing question.
+- **Role**: Triggered automatically when the candidate's previous score is `< 65/100`.
+- **LLM Prompt Structure**:
+  ```python
+  prompt = f"""
+  You are a senior technical interviewer for a {target_role} role.
+  ASSIGNMENT: Candidate's previous answer was weak. Ask a follow-up question on the SAME topic.
+  Original Question: {question_text}
+  Candidate Answer: {answer_text}
+  Why Answer Was Weak: {reasoning}
+  Candidate Resume Context: {json.dumps(resume_context)}
+  Return JSON: {{"question": "your single resume-specific follow-up question here"}}
+  """
+  ```
 
 ---
 
 ### Step 5: Scenario Agent (`scenario_agent.py`)
-- **Trigger**: Routed by Orchestrator for architectural and system design turns.
-- **Input**: Candidate target role, resume tech stack, weak areas, and score history.
-- **LLM Communication**: Prompts the LLM to generate an open-ended production scenario question testing architecture trade-offs.
-- **Output**: Updates state with scenario stage question.
+- **Role**: Generates open-ended system design and production trade-off scenario questions.
+- **LLM Prompt Structure**:
+  ```python
+  prompt = f"""
+  Generate an open-ended system design or production scenario question for a {target_role}.
+  Resume Tech Stack: {json.dumps(resume_context)}
+  Weak Areas: {weak_areas}
+  Return JSON: {{"question": "your single resume-specific scenario question here"}}
+  """
+  ```
 
 ---
 
 ### Step 6: Personality Agent (`personality_agent.py`)
-- **Trigger**: Routed by Orchestrator for soft skills and behavioral turns.
-- **Input**: Target role, resume project details, and conversation history.
-- **LLM Communication**: Prompts the LLM to generate a behavioral fit question focusing on past challenges, teamwork, or leadership.
-- **Output**: Updates state with personality question.
+- **Role**: Generates soft skills, teamwork, and past project challenge questions.
+- **LLM Prompt Structure**:
+  ```python
+  prompt = f"""
+  Generate a behavioral / soft skills interview question for a {target_role}.
+  Resume Projects & Experience: {json.dumps(resume_context.get('projects'))}
+  Focus on leadership, team collaboration, or handling project bottlenecks.
+  Return JSON: {{"question": "your single resume-specific behavioral question here"}}
+  """
+  ```
 
 ---
 
 ### Step 7: Audio Analysis Agent (`audio_analysis_agent.py`)
-- **Trigger**: Executed off the main thread when candidate uploads a spoken audio response (`.webm`).
-- **Engine Processing**:
-  - **OpenAI Whisper STT** (`faster-whisper` C++ engine) transcribes spoken audio locally into text.
-  - **Audio Analytics Engine** calculates Words Per Minute (WPM) speech pace and counts filler words (`um`, `uh`, `like`, `you know`, `basically`).
-- **Output**: Merges transcribed text into candidate answer and passes combined metrics to LLM evaluator.
+- **Role**: Processes candidate voice recordings off the main thread.
+- **Processing Engine**:
+  - Uses local **OpenAI Whisper STT** (`faster-whisper` C++ engine) to transcribe speech to text.
+  - Calculates Speech Pace (WPM) and counts filler words (`um`, `uh`, `like`, `you know`, `basically`).
 
 ---
 
-### Step 8: Learning Agent (`learning_agent.py`)
-- **Trigger**: Executed when 10 questions are completed.
-- **Input**: Session score history, weak areas collected, target role, and resume context.
-- **LLM Communication**: Prompts the LLM to analyze performance gaps and synthesize a personalized learning plan.
-- **Output**: Returns state updates marking `"current_stage": "complete"` and saving `"learning_plan"` to state for display on the Candidate Session Report page.
+### Step 8: Answer Evaluator (LLM Scoring Rubric)
+- **Role**: Evaluates candidate answer quality after each turn.
+- **LLM Prompt Structure**:
+  ```python
+  prompt = f"""
+  Evaluate this {agent_type} interview answer thoroughly.
+  Question: {question}
+  Candidate Answer: {answer}
+  Resume Context: {json.dumps(resume_context)}
+  Return JSON: {{"metrics": {{"clarity": 5, "relevance": 5, "technical_depth": 5}}, "reasoning": "...", "best_answer": "...", "user_answer_comparison": "..."}}
+  """
+  ```
+
+---
+
+### Step 9: Learning Agent (`learning_agent.py`)
+- **Role**: Runs when 10 questions are completed to build a personalized study plan.
+- **LLM Prompt Structure**:
+  ```python
+  prompt = f"""
+  Create a personalized learning plan for a {target_role} candidate.
+  Resume context: {json.dumps(resume_context)}
+  Session weak areas: {weak_areas}
+  Session scores: {json.dumps(scores)}
+  Recommend resources for skills/projects gaps visible on their resume.
+  Return JSON: {{"weak_areas": [...], "recommended_resources": [{{"title":"...","url":"...","type":"..."}}]}}
+  """
+  ```
 
 ---
 
