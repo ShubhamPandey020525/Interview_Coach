@@ -1,8 +1,6 @@
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
-
-
 from app.agents.audio_analysis_agent import audio_analysis_node
 from app.agents.followup_agent import followup_node
 from app.agents.learning_agent import learning_node
@@ -10,11 +8,9 @@ from app.agents.orchestrator import orchestrator_node
 from app.agents.personality_agent import personality_node
 from app.agents.resume_agent import resume_node
 from app.agents.scenario_agent import scenario_node
-from app.agents.technical_agent import technical_node
 from app.agents.state import InterviewState
+from app.agents.technical_agent import technical_node
 from app.services.llm_provider import LLMProvider, get_llm_provider
-
-
 
 # Specialist agents registry
 AGENT_REGISTRY = {
@@ -22,6 +18,7 @@ AGENT_REGISTRY = {
     "technical": technical_node,
     "followup": followup_node,
     "scenario": scenario_node,
+    "personality": personality_node,
     "resume": resume_node,
     "learning": learning_node,
     "audio_analysis": audio_analysis_node,
@@ -31,7 +28,7 @@ AGENT_REGISTRY = {
 _session_states: dict[str, dict] = {}
 
 
-def _route_from_orchestrator(state: dict) -> str:
+def _route_from_orchestrator(state: InterviewState | dict) -> str:
     return state.get("next_agent", "technical")
 
 
@@ -44,21 +41,21 @@ class InterviewGraph:
         self._app = self._build_graph().compile(checkpointer=self._checkpointer)
 
     def _bind(self, node_fn):
-        async def wrapper(state: dict) -> dict:
+        async def wrapper(state: InterviewState | dict) -> dict:
             return await node_fn(state, self.llm)
 
         return wrapper
 
     def _build_graph(self) -> StateGraph:
-        graph = StateGraph(dict)
+        graph = StateGraph(InterviewState)
         graph.add_node("orchestrator", self._bind(orchestrator_node))
         graph.add_node("technical", self._bind(technical_node))
         graph.add_node("followup", self._bind(followup_node))
         graph.add_node("scenario", self._bind(scenario_node))
+        graph.add_node("personality", self._bind(personality_node))
         graph.add_node("learning", self._bind(learning_node))
 
         graph.add_edge(START, "orchestrator")
-        graph.add_node("personality", self._bind(personality_node))
         graph.add_conditional_edges(
             "orchestrator",
             _route_from_orchestrator,
@@ -143,14 +140,7 @@ class InterviewGraph:
         working = {**state, **route}
         next_agent = route.get("next_agent", "technical")
 
-        agent_handlers = {
-            "technical": technical_node,
-            "followup": followup_node,
-            "scenario": scenario_node,
-            "personality": personality_node,
-            "learning": learning_node,
-        }
-        handler = agent_handlers.get(next_agent, technical_node)
+        handler = AGENT_REGISTRY.get(next_agent, technical_node)
         updates = await handler(working, self.llm)
         return {**working, **updates}
 
@@ -174,9 +164,8 @@ class InterviewGraph:
         }
 
     async def submit_answer(self, session_id: str, answer: str) -> dict:
-        from datetime import datetime
+        from datetime import datetime, timezone
 
-        config = self._config(session_id)
         state = await self._aget_state(session_id)
         if not state:
             raise ValueError("Session state not initialized")
@@ -193,7 +182,7 @@ class InterviewGraph:
             "last_answer": answer,
             "followup_depth": 0 if agent_type == "scenario" else state.get("followup_depth", 0),
             "conversation_history": state.get("conversation_history", [])
-            + [{"role": "user", "content": answer, "timestamp": datetime.utcnow().isoformat()}],
+            + [{"role": "user", "content": answer, "timestamp": datetime.now(timezone.utc).isoformat()}],
             "last_answer_scores": {"score": eval_result.score, "reasoning": eval_result.reasoning},
             "scores_collected": state.get("scores_collected", [])
             + [{"type": agent_type if agent_type != "followup" else "technical", "score": eval_result.score}],
@@ -236,6 +225,8 @@ def get_interview_graph(llm: LLMProvider | None = None) -> InterviewGraph:
     global _graph_instance
     if _graph_instance is None:
         _graph_instance = InterviewGraph(llm=llm)
+    elif llm is not None:
+        _graph_instance.llm = llm
     return _graph_instance
 
 
@@ -244,9 +235,18 @@ async def run_media_agents(audio_path: str | None) -> list[dict]:
     signals: list[dict] = []
     if audio_path:
         audio_result = await audio_analysis_node(audio_path)
-        signals.extend(audio_result.signals)
+        for sig in audio_result.signals:
+            if isinstance(sig, dict):
+                signals.append(sig)
+            else:
+                signals.append({
+                    "type": getattr(sig, "type", "communication"),
+                    "score": getattr(sig, "score", 75.0),
+                    "notes": getattr(sig, "notes", ""),
+                })
     return signals
 
 
 def clear_session_state(session_id: str) -> None:
     _session_states.pop(session_id, None)
+

@@ -13,7 +13,16 @@ ALLOWED_RESUME_TYPES = {
     "application/pdf": ".pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
 }
-ALLOWED_AUDIO_TYPES = {"audio/webm", "audio/wav", "audio/mpeg", "audio/ogg", "audio/mp4"}
+ALLOWED_AUDIO_TYPES = {
+    "audio/webm": ".webm",
+    "audio/wav": ".wav",
+    "audio/x-wav": ".wav",
+    "audio/mpeg": ".mp3",
+    "audio/mp3": ".mp3",
+    "audio/ogg": ".ogg",
+    "audio/mp4": ".mp4",
+    "audio/m4a": ".m4a",
+}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
 
@@ -26,7 +35,6 @@ class StorageService:
         for subdir in ("resumes", "audio", "tts"):
             (self.media_root / subdir).mkdir(parents=True, exist_ok=True)
 
-
     async def save_resume(self, file: UploadFile) -> str:
         return await self._save_file(file, "resumes", ALLOWED_RESUME_TYPES)
 
@@ -37,7 +45,7 @@ class StorageService:
         self,
         file: UploadFile,
         subdir: str,
-        allowed_types: set[str],
+        allowed_types: dict[str, str],
         strict_type: bool = True,
     ) -> str:
         if not file.filename:
@@ -54,7 +62,7 @@ class StorageService:
             if content_type not in allowed_types and ext not in {".pdf", ".docx"}:
                 raise AppException("UNSUPPORTED_FILE_TYPE", f"Unsupported file type: {content_type}", 415)
         else:
-            if content_type and content_type not in allowed_types and ext not in {".webm", ".mp4", ".wav", ".ogg", ".mp3"}:
+            if content_type and content_type not in allowed_types and ext not in {".webm", ".mp4", ".wav", ".ogg", ".mp3", ".m4a"}:
                 raise AppException("UNSUPPORTED_FILE_TYPE", f"Unsupported file type: {content_type}", 415)
 
         if not ext:
@@ -62,12 +70,18 @@ class StorageService:
 
         filename = f"{uuid.uuid4()}{ext}"
         filepath = self.media_root / subdir / filename
-        with open(filepath, "wb") as f:
-            f.write(content)
+        filepath.write_bytes(content)
 
-        return str(filepath.relative_to(self.media_root.parent) if self.media_root.is_absolute() else filepath)
+        rel = filepath.relative_to(self.media_root.parent) if self.media_root.is_absolute() else filepath
+        return str(rel).replace("\\", "/")
 
     def get_absolute_path(self, relative_path: str) -> Path:
+        if not relative_path:
+            return self.media_root
         if os.path.isabs(relative_path):
             return Path(relative_path)
-        return Path(settings.media_root).parent / relative_path if "media" in relative_path else Path(settings.media_root) / relative_path.replace("media/", "")
+        norm_path = relative_path.replace("\\", "/")
+        if norm_path.startswith("media/"):
+            return self.media_root.parent / norm_path
+        return self.media_root / norm_path.replace("media/", "")
+
