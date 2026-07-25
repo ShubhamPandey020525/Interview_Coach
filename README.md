@@ -27,6 +27,19 @@ The core engine is powered by **LangGraph** with 8 specialized AI agents working
 
 ---
 
+### 🛠️ Agent Infrastructure & Helper Files
+
+Besides the 8 conversational agents, the agent system includes 4 infrastructure and utility files:
+
+| File | Type | Purpose & Functionality |
+|---|---|---|
+| [`graph.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/graph.py) | Engine | **LangGraph Compiler & Registry**. Assembles state nodes into a `StateGraph`, manages session state checkpointers (`MemorySaver`), and exports `AGENT_REGISTRY`. |
+| [`state.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/state.py) | Schema | **Shared State Interface**. Defines `InterviewState` (TypedDict) shared across all agents to store scores, question count, and resume context. |
+| [`resume_context.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/resume_context.py) | Helper | **Context Validation Utility**. Verifies that candidate resume skills and projects exist before starting an interview (`is_resume_context_sufficient`). |
+| [`video_analysis_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/video_analysis_agent.py) | Helper | **Vision Analysis Node**. Evaluates candidate posture stability and face engagement using MediaPipe and OpenCV. |
+
+---
+
 ## 🔄 Sequential Multi-Agent Execution Flow
 
 ```mermaid
