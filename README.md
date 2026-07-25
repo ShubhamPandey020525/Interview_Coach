@@ -22,7 +22,7 @@ The core engine is powered by **LangGraph** with 8 specialized AI agents working
 | **4** | **Follow-up Agent** | [`followup_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/followup_agent.py) | **Deep Probe Specialist**. Automatically triggered when a candidate's answer score is below 65% or incomplete. Probes deeper into weak technical areas to test true comprehension. |
 | **5** | **Scenario Agent** | [`scenario_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/scenario_agent.py) | **System Architecture & Situational Specialist**. Asks open-ended production trade-off, architectural design, and practical problem-solving scenarios based on the resume tech stack. |
 | **6** | **Personality Agent** | [`personality_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/personality_agent.py) | **Behavioral & HR Specialist**. Asks questions about past project challenges, team collaboration, leadership experience, and soft skills. |
-| **7** | **Learning Agent** | [`learning_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/learning_agent.py) | **Post-Interview Coach**. Runs when the interview completes (max questions reached). Aggregates scores, identifies weak areas, and builds a personalized learning plan with study resources. |
+| **7** | **Learning Agent** | [`learning_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/learning_agent.py) | **Post-Interview Coach**. Runs when the interview completes (max questions reached). Sends candidate scores and weak areas to the LLM to generate a custom learning plan. |
 | **8** | **Audio Analysis Agent** | [`audio_analysis_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/audio_analysis_agent.py) | **Voice & Speech Analyst**. Processes recorded candidate voice responses off the main thread. Measures Speech Pace (WPM), counts filler words (`um`, `uh`, `like`), and computes clarity/confidence scores. |
 
 ---
@@ -76,10 +76,20 @@ The application uses a **dual-path communication model** (WebSockets for live re
 4. The transcribed text is sent to LLM for technical evaluation.
 5. Combined scores (technical + speech clarity + filler metrics) are broadcast back to the frontend in real time via WebSockets.
 
-### 4. Generating the Final Report & Learning Plan
+### 4. Generating the Final Report & Learning Plan (Learning Agent → LLM)
 1. Once 10 questions are completed, the Orchestrator routes state to the **Learning Agent**.
-2. The **Learning Agent** synthesizes candidate performance, identifies top weak areas, and generates recommended learning resources.
-3. The candidate is redirected to the **Session Report Page** showing overall score breakdown, strengths, weaknesses, attempt timeline, and personalized study links.
+2. The **Learning Agent** constructs a targeted prompt sent directly to the LLM:
+   ```python
+   prompt = f"""
+   Create a personalized learning plan for a {target_role} candidate.
+   Resume context: {resume_context}
+   Session weak areas: {weak_areas}
+   Session scores: {scores}
+   Recommend resources for skills/projects gaps visible on their resume.
+   """
+   ```
+3. The LLM processes candidate performance and resume gaps to return a structured JSON object: `{"weak_areas": [...], "recommended_resources": [...]}`.
+4. The candidate is redirected to the **Session Report Page** showing overall score breakdown, strengths, weaknesses, attempt timeline, and personalized study links.
 
 ---
 
