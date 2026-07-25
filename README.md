@@ -6,7 +6,28 @@ An AI-powered mock interview system built with **FastAPI**, **React**, and **Lan
 
 ## 🌟 Overview
 
-The AI Technical Interview Coach creates realistic mock interviews. Instead of asking random questions, it reads your resume to ask questions about your actual skills and projects. It adjusts question difficulty based on your answers, asks follow-up questions when an answer is weak, and gives detailed feedback on your score, speech speed, and filler words.
+The AI Technical Interview Coach creates realistic mock interviews. Instead of asking random questions, it reads your resume to ask questions about your actual skills and projects. It adjusts question difficulty based on your performance, asks follow-up questions when an answer is weak, and gives detailed feedback on your score, speech speed, and filler words.
+
+---
+
+## 📸 Proof of Work
+
+Here is the step-by-step visual demonstration of the working application:
+
+### 1. Candidate Setup & Resume Parsing
+![1. Candidate Setup & Resume Parsing](proofs/1.png)
+
+### 2. Live AI Interview Room & Voice Question
+![2. Live AI Interview Room & Voice Question](proofs/2.png)
+
+### 3. Real-Time Answer Evaluation & Feedback
+![3. Real-Time Answer Evaluation & Feedback](proofs/3.png)
+
+### 4. Speech Analytics & Filler Words Analysis
+![4. Speech Analytics & Filler Words Analysis](proofs/4.png)
+
+### 5. Session Report & Personal Learning Plan
+![5. Session Report & Personal Learning Plan](proofs/5.png)
 
 ---
 
