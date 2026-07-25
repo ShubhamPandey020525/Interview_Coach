@@ -6,7 +6,7 @@ An AI-powered mock interview system built with **FastAPI**, **React**, and **Lan
 
 ## 🌟 Overview
 
-The AI Technical Interview Coach creates realistic mock interviews. Instead of asking random questions, it reads your resume to ask questions about your actual skills and projects. It adjusts question difficulty based on your answers, asks follow-up questions when an answer is weak, and gives detailed feedback on your score, speech speed, and filler words.
+The AI Technical Interview Coach creates realistic mock interviews. Instead of asking random questions, it reads your resume to ask questions about your actual skills and projects. It adjusts question difficulty based on your performance, asks follow-up questions when an answer is weak, and gives detailed feedback on your score, speech speed, and filler words.
 
 ---
 
@@ -45,49 +45,38 @@ Besides the 8 main agents, the system relies on 4 helper files:
 Here is how a candidate moves through the agents during an interview session:
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '18px', 'fontFamily': 'system-ui, sans-serif'}}}%%
 flowchart TD
-    subgraph Phase1["📄 Phase 1: Context Setup"]
-        Start(["<b>🚀 1. Candidate Starts Session</b>"]) --> Resume["<b>📄 Resume Agent</b><br>Extract Skills, Stack & Projects"]
-    end
+    Start(["🚀 1. Candidate Starts Session"]) --> Resume["📄 Resume Agent: Extract Skills, Stack & Projects"]
+    Resume --> Orch{"🧠 Orchestrator Agent: Evaluate Progress & Pick Next Turn"}
 
-    subgraph Phase2["🧠 Phase 2: Orchestration & Routing"]
-        Resume --> Orch{"<b>🧠 Orchestrator Agent</b><br>Evaluate Progress & Pick Next Turn"}
-    end
+    Orch -->|"Technical Turn"| Tech["💻 Technical Agent: Core Coding & Concept Questions"]
+    Orch -->|"Score < 65%"| Followup["🔍 Follow-up Agent: Deep Probe on Weak Concepts"]
+    Orch -->|"Architecture Turn"| Scenario["🏗️ Scenario Agent: System Design & Trade-offs"]
+    Orch -->|"Behavioral Turn"| Personality["🤝 Personality Agent: Soft Skills & Teamwork Qs"]
 
-    subgraph Phase3["🎯 Phase 3: Specialist Question Agents"]
-        Orch -->|"Technical Turn"| Tech["<b>💻 Technical Agent</b><br>Core Coding & Concept Qs"]
-        Orch -->|"Score < 65%"| Followup["<b>🔍 Follow-up Agent</b><br>Deep Probe on Weak Concepts"]
-        Orch -->|"Architecture Turn"| Scenario["<b>🏗️ Scenario Agent</b><br>System Design & Trade-offs"]
-        Orch -->|"Behavioral Turn"| Personality["<b>🤝 Personality Agent</b><br>Soft Skills & Teamwork Qs"]
-    end
-
-    subgraph Phase4["🎙️ Phase 4: Candidate Response & Multi-Agent Evaluation"]
-        Tech & Followup & Scenario & Personality --> CandidateAnswer["<b>💬 Candidate Responds</b><br>(Typed Text or Spoken Audio)"]
-        CandidateAnswer -->|"Voice Recording"| AudioAgent["<b>🎙️ Audio Analysis Agent</b><br>OpenAI Whisper STT + WPM & Fillers"]
-        CandidateAnswer -->|"Typed Text"| LLMEval["<b>⚖️ LLM Answer Evaluator</b><br>0-100 Score, Reasoning & Best Answer"]
-        AudioAgent --> LLMEval
-    end
-
-    subgraph Phase5["🎓 Phase 5: Post-Interview Learning"]
-        Orch -->|"10 Questions Completed"| Learning["<b>🎓 Learning Agent</b><br>Synthesize Custom Learning Plan"]
-        Learning --> Complete(["<b>🏆 Interview Complete</b><br>Final Session Report Delivered"])
-    end
+    Tech & Followup & Scenario & Personality --> CandidateAnswer["💬 Candidate Responds: Typed Text or Spoken Audio"]
+    
+    CandidateAnswer -->|"Spoken Voice"| AudioAgent["🎙️ Audio Analysis Agent: OpenAI Whisper STT + WPM & Fillers"]
+    CandidateAnswer -->|"Typed Text"| LLMEval["⚖️ LLM Answer Evaluator: 0-100 Score, Reasoning & Comparison"]
+    AudioAgent --> LLMEval
 
     LLMEval -->|"Loop Next Question"| Orch
 
-    %% Modern High-Legibility Styling
-    classDef startStyle fill:#1e40af,stroke:#60a5fa,stroke-width:3px,color:#ffffff,font-size:18px;
-    classDef orchStyle fill:#4c1d95,stroke:#a78bfa,stroke-width:3px,color:#ffffff,font-size:18px;
-    classDef agentStyle fill:#065f46,stroke:#34d399,stroke-width:3px,color:#ffffff,font-size:18px;
-    classDef evalStyle fill:#92400e,stroke:#fbbf24,stroke-width:3px,color:#ffffff,font-size:18px;
-    classDef learnStyle fill:#6b21a8,stroke:#c084fc,stroke-width:3px,color:#ffffff,font-size:18px;
+    Orch -->|"10 Questions Finished"| Learning["🎓 Learning Agent: Synthesize Custom Learning Plan"]
+    Learning --> Complete(["🏆 Interview Complete: Final Session Report Delivered"])
 
-    class Start,Complete startStyle;
-    class Orch orchStyle;
-    class Resume,Tech,Followup,Scenario,Personality agentStyle;
-    class CandidateAnswer,AudioAgent,LLMEval evalStyle;
-    class Learning learnStyle;
+    %% Clean Uniform High-Legibility Styling
+    classDef mainNode fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc,font-size:16px;
+    classDef orchNode fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f8fafc,font-size:16px;
+    classDef agentNode fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc,font-size:16px;
+    classDef evalNode fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f8fafc,font-size:16px;
+    classDef finalNode fill:#581c87,stroke:#c084fc,stroke-width:2px,color:#f8fafc,font-size:16px;
+
+    class Start mainNode;
+    class Orch orchNode;
+    class Resume,Tech,Followup,Scenario,Personality agentNode;
+    class CandidateAnswer,AudioAgent,LLMEval evalNode;
+    class Learning,Complete finalNode;
 ```
 
 ---
