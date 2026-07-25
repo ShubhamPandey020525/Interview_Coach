@@ -63,7 +63,11 @@ The application uses a **dual-path communication model** (WebSockets for live re
 - **🗣️ Edge-TTS (Text-to-Speech)**:
   - **What it is**: Microsoft's Neural Text-to-Speech engine.
   - **Role**: Converts AI-generated text questions into clear human-sounding voice audio clips (`.mp3`).
-  - **Voice Personas**: Uses `en-US-JennyNeural` (HR/Behavioral), `en-US-ChristopherNeural` (Technical), and `en-US-EricNeural` (System Design).
+  - **Neural Voice Models**:
+    - `en-US-JennyNeural`: HR, Behavioral, Personality, and Intro questions.
+    - `en-US-ChristopherNeural`: Technical, Coding, and Follow-up questions.
+    - `en-US-EricNeural`: Scenario and System Design architecture questions.
+  - **Fallback Engine**: `gTTS` (Google Text-to-Speech, `lang="en"`) automatically activates if Edge-TTS network requests fail.
 
 - **⚡ WebSockets (`ws://localhost:8000/api/ws/{session_id}`)**:
   - **What it is**: A persistent, real-time bi-directional TCP communication pipe between React UI and FastAPI.
