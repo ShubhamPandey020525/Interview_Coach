@@ -6,7 +6,7 @@ An AI-powered mock interview system built with **FastAPI**, **React**, and **Lan
 
 ## 🌟 Overview
 
-The AI Technical Interview Coach creates realistic mock interviews. Instead of asking random questions, it reads your resume to ask questions about your actual skills and projects. It adjusts question difficulty based on your performance, asks follow-up questions when an answer is weak, and gives detailed feedback on your score, speech speed, and filler words.
+The AI Technical Interview Coach creates realistic mock interviews. Instead of asking random questions, it reads your resume to ask questions about your actual skills and projects. It adjusts question difficulty based on your answers, asks follow-up questions when an answer is weak, and gives detailed feedback on your score, speech speed, and filler words.
 
 ---
 
@@ -24,19 +24,6 @@ The system uses **LangGraph** to coordinate 8 AI agents:
 | **6** | **Personality Agent** | [`personality_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/personality_agent.py) | LLM | **Behavioral Examiner**. Asks soft skills, teamwork, and past project challenge questions. |
 | **7** | **Learning Agent** | [`learning_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/learning_agent.py) | LLM | **Study Coach**. Analyzes weak areas at the end of the interview to build a custom study plan. |
 | **8** | **Audio Analysis Agent** | [`audio_analysis_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/audio_analysis_agent.py) | Engine | **Voice Analyst**. Transcribes spoken answers, calculates speech speed (WPM), and counts filler words. |
-
----
-
-### 🛠️ Helper Files
-
-Besides the 8 main agents, the system relies on 4 helper files:
-
-| File | Type | Description |
-|---|---|---|
-| [`graph.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/graph.py) | Engine | **LangGraph Compiler**. Connects all agent nodes into an executable graph workflow. |
-| [`state.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/state.py) | Schema | **Shared State Data**. Defines the shared data structure (`InterviewState`) used by all agents. |
-| [`resume_context.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/resume_context.py) | Helper | **Resume Checker**. Checks if the candidate uploaded a valid resume before starting. |
-| [`video_analysis_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/video_analysis_agent.py) | Helper | **Vision Evaluator**. Uses MediaPipe and OpenCV to measure posture stability and eye contact. |
 
 ---
 
@@ -220,11 +207,33 @@ flowchart TD
 
 ---
 
-## 🛠️ Technology Stack
+### 🛠️ Agent Infrastructure & Helper Files
 
-- **Backend**: Python 3.11, FastAPI, LangGraph, OpenAI / Gemini LLM API, OpenAI Whisper STT (`faster-whisper`), Edge-TTS (TTS), OpenCV & MediaPipe (Vision).
-- **Frontend**: React 19, Vite, TypeScript, Tailwind CSS v4, Zustand, TanStack React Query, Recharts.
-- **Data Storage**: In-Memory Transient Store (`app/store.py`), zero database installation required.
+Besides the 8 main agents, the system relies on 4 helper files:
+
+| File | Type | Description |
+|---|---|---|
+| [`graph.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/graph.py) | Engine | **LangGraph Compiler**. Connects all agent nodes into an executable graph workflow. |
+| [`state.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/state.py) | Schema | **Shared State Data**. Defines the shared data structure (`InterviewState`) used by all agents. |
+| [`resume_context.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/resume_context.py) | Helper | **Resume Checker**. Checks if the candidate uploaded a valid resume before starting. |
+| [`video_analysis_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/video_analysis_agent.py) | Helper | **Vision Evaluator**. Uses MediaPipe and OpenCV to measure posture stability and eye contact. |
+
+---
+
+## 🤖 AI & Technology Stack
+
+The platform integrates modern AI, Machine Learning, Speech Processing, and Web technologies:
+
+| Category | Technology / Model | Role & Functionality |
+|---|---|---|
+| **Multi-Agent Engine** | **LangGraph** | Multi-agent state machine orchestrator managing state transitions, checkpointers, and turn routing. |
+| **LLM AI Models** | **OpenAI (`gpt-4o-mini`) / Gemini (`2.5-flash`)** | Generates resume-grounded questions, evaluates candidate answers (0-100 score), and synthesizes learning plans. |
+| **Speech-to-Text (STT)** | **OpenAI Whisper (`faster-whisper`)** | Local 100% free speech recognition engine (`base` model with `int8` CPU quantization) for transcribing audio. |
+| **Text-to-Speech (TTS)** | **Microsoft Edge-TTS & gTTS** | Neural voice engine creating natural question audio (`en-US-JennyNeural`, `en-US-ChristopherNeural`, `en-US-EricNeural`). |
+| **Computer Vision** | **MediaPipe & OpenCV** | Analyzes candidate webcam frames for posture stability, facial engagement, and head alignment. |
+| **Backend Framework** | **FastAPI & Python 3.11** | High-performance async ASGI web framework handling REST endpoints and WebSocket channels. |
+| **Frontend Framework** | **React 19 & Vite** | Modern reactive UI built with TypeScript, Tailwind CSS v4, Zustand, and Recharts analytics. |
+| **Data & Storage** | **In-Memory Store (`store.py`)** | Lightweight transient session storage requiring zero external database installations. |
 
 ---
 
