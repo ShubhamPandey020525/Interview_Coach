@@ -45,42 +45,43 @@ Besides the 8 main agents, the system relies on 4 helper files:
 Here is how a candidate moves through the agents during an interview session:
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '18px', 'fontFamily': 'system-ui, sans-serif'}}}%%
 flowchart TD
     subgraph Phase1["📄 Phase 1: Context Setup"]
-        Start(["🚀 1. Candidate Starts Session"]) --> Resume["📄 Resume Agent<br><i>Extract Skills, Stack & Projects</i>"]
+        Start(["<b>🚀 1. Candidate Starts Session</b>"]) --> Resume["<b>📄 Resume Agent</b><br>Extract Skills, Stack & Projects"]
     end
 
     subgraph Phase2["🧠 Phase 2: Orchestration & Routing"]
-        Resume --> Orch{"🧠 Orchestrator Agent<br><i>Evaluate Progress & Pick Next Turn</i>"}
+        Resume --> Orch{"<b>🧠 Orchestrator Agent</b><br>Evaluate Progress & Pick Next Turn"}
     end
 
     subgraph Phase3["🎯 Phase 3: Specialist Question Agents"]
-        Orch -->|"Technical Turn"| Tech["💻 Technical Agent<br><i>Core Coding & Concept Qs</i>"]
-        Orch -->|"Score < 65%"| Followup["🔍 Follow-up Agent<br><i>Deep Probe on Weak Concepts</i>"]
-        Orch -->|"Architecture Turn"| Scenario["🏗️ Scenario Agent<br><i>System Design & Trade-offs</i>"]
-        Orch -->|"Behavioral Turn"| Personality["🤝 Personality Agent<br><i>Soft Skills & Teamwork Qs</i>"]
+        Orch -->|"Technical Turn"| Tech["<b>💻 Technical Agent</b><br>Core Coding & Concept Qs"]
+        Orch -->|"Score < 65%"| Followup["<b>🔍 Follow-up Agent</b><br>Deep Probe on Weak Concepts"]
+        Orch -->|"Architecture Turn"| Scenario["<b>🏗️ Scenario Agent</b><br>System Design & Trade-offs"]
+        Orch -->|"Behavioral Turn"| Personality["<b>🤝 Personality Agent</b><br>Soft Skills & Teamwork Qs"]
     end
 
     subgraph Phase4["🎙️ Phase 4: Candidate Response & Multi-Agent Evaluation"]
-        Tech & Followup & Scenario & Personality --> CandidateAnswer["💬 Candidate Responds<br><i>(Typed Text or Spoken Audio)</i>"]
-        CandidateAnswer -->|"Voice Recording"| AudioAgent["🎙️ Audio Analysis Agent<br><i>OpenAI Whisper STT + WPM & Fillers</i>"]
-        CandidateAnswer -->|"Typed Text"| LLMEval["⚖️ LLM Answer Evaluator<br><i>0-100 Score, Reasoning & Best Answer</i>"]
+        Tech & Followup & Scenario & Personality --> CandidateAnswer["<b>💬 Candidate Responds</b><br>(Typed Text or Spoken Audio)"]
+        CandidateAnswer -->|"Voice Recording"| AudioAgent["<b>🎙️ Audio Analysis Agent</b><br>OpenAI Whisper STT + WPM & Fillers"]
+        CandidateAnswer -->|"Typed Text"| LLMEval["<b>⚖️ LLM Answer Evaluator</b><br>0-100 Score, Reasoning & Best Answer"]
         AudioAgent --> LLMEval
     end
 
     subgraph Phase5["🎓 Phase 5: Post-Interview Learning"]
-        Orch -->|"10 Questions Completed"| Learning["🎓 Learning Agent<br><i>Synthesize Custom Learning Plan</i>"]
-        Learning --> Complete(["🏆 Interview Complete<br><i>Final Session Report Delivered</i>"])
+        Orch -->|"10 Questions Completed"| Learning["<b>🎓 Learning Agent</b><br>Synthesize Custom Learning Plan"]
+        Learning --> Complete(["<b>🏆 Interview Complete</b><br>Final Session Report Delivered"])
     end
 
     LLMEval -->|"Loop Next Question"| Orch
 
-    %% Modern Theme Styling
-    classDef startStyle fill:#1e40af,stroke:#3b82f6,stroke-width:2px,color:#ffffff;
-    classDef orchStyle fill:#4c1d95,stroke:#8b5cf6,stroke-width:2px,color:#ffffff;
-    classDef agentStyle fill:#065f46,stroke:#10b981,stroke-width:2px,color:#ffffff;
-    classDef evalStyle fill:#92400e,stroke:#f59e0b,stroke-width:2px,color:#ffffff;
-    classDef learnStyle fill:#6b21a8,stroke:#a855f7,stroke-width:2px,color:#ffffff;
+    %% Modern High-Legibility Styling
+    classDef startStyle fill:#1e40af,stroke:#60a5fa,stroke-width:3px,color:#ffffff,font-size:18px;
+    classDef orchStyle fill:#4c1d95,stroke:#a78bfa,stroke-width:3px,color:#ffffff,font-size:18px;
+    classDef agentStyle fill:#065f46,stroke:#34d399,stroke-width:3px,color:#ffffff,font-size:18px;
+    classDef evalStyle fill:#92400e,stroke:#fbbf24,stroke-width:3px,color:#ffffff,font-size:18px;
+    classDef learnStyle fill:#6b21a8,stroke:#c084fc,stroke-width:3px,color:#ffffff,font-size:18px;
 
     class Start,Complete startStyle;
     class Orch orchStyle;
