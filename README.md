@@ -4,27 +4,6 @@ The **AI Technical Interview Coach** is a real-world mock interview platform bui
 
 ---
 
-## 📸 Proof of Work
-
-Here is the step-by-step visual demonstration of the working application:
-
-### 1. Candidate Setup & Resume Parsing
-![1. Candidate Setup & Resume Parsing](proofs/1.png)
-
-### 2. Live AI Interview Room & Voice Question
-![2. Live AI Interview Room & Voice Question](proofs/2.png)
-
-### 3. Real-Time Answer Evaluation & Feedback
-![3. Real-Time Answer Evaluation & Feedback](proofs/3.png)
-
-### 4. Speech Analytics & Filler Words Analysis
-![4. Speech Analytics & Filler Words Analysis](proofs/4.png)
-
-### 5. Session Report & Personal Learning Plan
-![5. Session Report & Personal Learning Plan](proofs/5.png)
-
----
-
 ## 🤖 The 8 AI Agents and Their Roles
 
 The system uses **LangGraph** to coordinate 8 AI agents:
@@ -224,14 +203,13 @@ flowchart TD
 
 ### 🛠️ Agent Infrastructure & Helper Files
 
-Besides the 8 main agents, the system relies on 4 helper files:
+Besides the 8 main agents, the system relies on 3 helper files:
 
 | File | Type | Description |
 |---|---|---|
 | [`graph.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/graph.py) | Engine | **LangGraph Compiler**. Connects all agent nodes into an executable graph workflow. |
 | [`state.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/state.py) | Schema | **Shared State Data**. Defines the shared data structure (`InterviewState`) used by all agents. |
 | [`resume_context.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/resume_context.py) | Helper | **Resume Checker**. Checks if the candidate uploaded a valid resume before starting. |
-| [`video_analysis_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/video_analysis_agent.py) | Helper | **Vision Evaluator**. Uses MediaPipe and OpenCV to measure posture stability and eye contact. |
 
 ---
 
@@ -245,10 +223,30 @@ The platform integrates modern AI, Machine Learning, Speech Processing, and Web 
 | **LLM AI Models** | **OpenAI (`gpt-4o-mini`) / Gemini (`2.5-flash`)** | Generates resume-grounded questions, evaluates candidate answers (0-100 score), and synthesizes learning plans. |
 | **Speech-to-Text (STT)** | **OpenAI Whisper (`faster-whisper`)** | Local 100% free speech recognition engine (`base` model with `int8` CPU quantization) for transcribing audio. |
 | **Text-to-Speech (TTS)** | **Microsoft Edge-TTS & gTTS** | Neural voice engine creating natural question audio (`en-US-JennyNeural`, `en-US-ChristopherNeural`, `en-US-EricNeural`). |
-| **Computer Vision** | **MediaPipe & OpenCV** | Analyzes candidate webcam frames for posture stability, facial engagement, and head alignment. |
 | **Backend Framework** | **FastAPI & Python 3.11** | High-performance async ASGI web framework handling REST endpoints and WebSocket channels. |
 | **Frontend Framework** | **React 19 & Vite** | Modern reactive UI built with TypeScript, Tailwind CSS v4, Zustand, and Recharts analytics. |
 | **Data & Storage** | **In-Memory Store (`store.py`)** | Lightweight transient session storage requiring zero external database installations. |
+
+---
+
+## 📸 Proof of Work
+
+Here is the step-by-step visual demonstration of the working application:
+
+### 1. Candidate Setup & Resume Parsing
+![1. Candidate Setup & Resume Parsing](proofs/1.png)
+
+### 2. Live AI Interview Room & Voice Question
+![2. Live AI Interview Room & Voice Question](proofs/2.png)
+
+### 3. Real-Time Answer Evaluation & Feedback
+![3. Real-Time Answer Evaluation & Feedback](proofs/3.png)
+
+### 4. Speech Analytics & Filler Words Analysis
+![4. Speech Analytics & Filler Words Analysis](proofs/4.png)
+
+### 5. Session Report & Personal Learning Plan
+![5. Session Report & Personal Learning Plan](proofs/5.png)
 
 ---
 
