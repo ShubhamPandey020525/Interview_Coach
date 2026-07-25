@@ -58,6 +58,19 @@ flowchart TD
 
 The application uses a **dual-path communication model** (WebSockets for live real-time interaction and REST for file/media handling):
 
+### 💡 Core Tech Concepts (Edge-TTS & WebSockets)
+
+- **🗣️ Edge-TTS (Text-to-Speech)**:
+  - **What it is**: Microsoft's Neural Text-to-Speech engine.
+  - **Role**: Converts AI-generated text questions into clear human-sounding voice audio clips (`.mp3`).
+  - **Voice Personas**: Uses `en-US-JennyNeural` (HR/Behavioral), `en-US-ChristopherNeural` (Technical), and `en-US-EricNeural` (System Design).
+
+- **⚡ WebSockets (`ws://localhost:8000/api/ws/{session_id}`)**:
+  - **What it is**: A persistent, real-time bi-directional TCP communication pipe between React UI and FastAPI.
+  - **Role**: Pushes evaluation results, Speech-to-Text transcripts, and question turn updates to the user interface instantly without full page reloads.
+
+---
+
 ### 1. Asking a Question (AI → Candidate)
 1. The **Orchestrator** picks the next agent node.
 2. The chosen agent (e.g., Technical Agent) generates a question using LLM grounded in candidate resume skills.
@@ -76,9 +89,30 @@ The application uses a **dual-path communication model** (WebSockets for live re
 4. The transcribed text is sent to LLM for technical evaluation.
 5. Combined scores (technical + speech clarity + filler metrics) are broadcast back to the frontend in real time via WebSockets.
 
+---
+
 ### 4. Generating the Final Report & Learning Plan (Learning Agent → LLM)
-1. Once 10 questions are completed, the Orchestrator routes state to the **Learning Agent**.
-2. The **Learning Agent** constructs a targeted prompt sent directly to the LLM:
+
+Once 10 questions are completed, the Orchestrator routes state to the **Learning Agent** (`learning_agent.py`):
+
+```python
+async def learning_node(state: dict, llm: LLMProvider) -> dict:
+    """Learning Agent — synthesizes weak areas and recommended resources."""
+    plan = await llm.generate_learning_plan(
+        state.get("scores_collected", []),
+        state.get("weak_areas", []),
+        state["target_role"],
+        state.get("resume_context", {}),
+    )
+    return {
+        "current_stage": "complete",
+        "weak_areas": plan.get("weak_areas", state.get("weak_areas", [])),
+        "learning_plan": plan,
+    }
+```
+
+#### How the Learning Node State Flow Works:
+1. **LLM Prompt Construction**: The agent constructs a structured prompt sent directly to the LLM:
    ```python
    prompt = f"""
    Create a personalized learning plan for a {target_role} candidate.
@@ -88,8 +122,14 @@ The application uses a **dual-path communication model** (WebSockets for live re
    Recommend resources for skills/projects gaps visible on their resume.
    """
    ```
-3. The LLM processes candidate performance and resume gaps to return a structured JSON object: `{"weak_areas": [...], "recommended_resources": [...]}`.
-4. The candidate is redirected to the **Session Report Page** showing overall score breakdown, strengths, weaknesses, attempt timeline, and personalized study links.
+2. **State Return Keys (3 Update Values)**:
+   - `"current_stage": "complete"`: Tells the Orchestrator and graph state machine that the interview lifecycle is finished.
+   - `"weak_areas"`: Updates the graph state with the finalized list of weak candidate topics.
+   - `"learning_plan"`: Stores the full LLM JSON response containing `weak_areas` and `recommended_resources`.
+3. **Data Pipeline**:
+   - `learning_node` updates graph state → `InterviewGraph.complete_session()` returns plan.
+   - `sessions.py` saves `learning_plan` in transient store `_in_memory_learning_plans[session_id]`.
+   - `GET /api/sessions/{session_id}/report` endpoint reads stored plan and renders custom study resource cards on the candidate dashboard.
 
 ---
 
