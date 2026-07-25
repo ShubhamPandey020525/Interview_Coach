@@ -46,24 +46,47 @@ Here is how a candidate moves through the agents during an interview session:
 
 ```mermaid
 flowchart TD
-    Start([1. Candidate Starts Session]) --> Resume[Step 1: Resume Agent - Extract Skills & Projects]
-    Resume --> Orch[Step 2: Orchestrator Agent - Check Progress & Pick Next Turn]
-    
-    Orch -->|Technical Stage| Tech[Step 3: Technical Agent - Ask Core Technical Qs]
-    Orch -->|Score < 65%| Followup[Step 4: Follow-up Agent - Ask Probing Qs]
-    Orch -->|System Design| Scenario[Step 5: Scenario Agent - Ask Production Scenario Qs]
-    Orch -->|Behavioral / HR| Personality[Step 6: Personality Agent - Ask Behavioral Qs]
-    
-    Tech & Followup & Scenario & Personality --> CandidateAnswer[Candidate Answers via Text or Voice]
-    
-    CandidateAnswer -->|Audio Upload| AudioAgent[Step 7: Audio Analysis Agent - Transcribe & Calculate Speed/Fillers]
-    CandidateAnswer -->|Text Answer| LLMEval[LLM Answer Evaluator - Grade Score, Reasoning & Comparison]
-    
-    AudioAgent --> LLMEval
-    LLMEval --> Orch
-    
-    Orch -->|10 Questions Finished| Learning[Step 8: Learning Agent - Generate Personal Study Plan]
-    Learning --> Complete([Interview Complete - Final Session Report Delivered])
+    subgraph Phase1["📄 Phase 1: Context Setup"]
+        Start(["🚀 1. Candidate Starts Session"]) --> Resume["📄 Resume Agent<br><i>Extract Skills, Stack & Projects</i>"]
+    end
+
+    subgraph Phase2["🧠 Phase 2: Orchestration & Routing"]
+        Resume --> Orch{"🧠 Orchestrator Agent<br><i>Evaluate Progress & Pick Next Turn</i>"}
+    end
+
+    subgraph Phase3["🎯 Phase 3: Specialist Question Agents"]
+        Orch -->|"Technical Turn"| Tech["💻 Technical Agent<br><i>Core Coding & Concept Qs</i>"]
+        Orch -->|"Score < 65%"| Followup["🔍 Follow-up Agent<br><i>Deep Probe on Weak Concepts</i>"]
+        Orch -->|"Architecture Turn"| Scenario["🏗️ Scenario Agent<br><i>System Design & Trade-offs</i>"]
+        Orch -->|"Behavioral Turn"| Personality["🤝 Personality Agent<br><i>Soft Skills & Teamwork Qs</i>"]
+    end
+
+    subgraph Phase4["🎙️ Phase 4: Candidate Response & Multi-Agent Evaluation"]
+        Tech & Followup & Scenario & Personality --> CandidateAnswer["💬 Candidate Responds<br><i>(Typed Text or Spoken Audio)</i>"]
+        CandidateAnswer -->|"Voice Recording"| AudioAgent["🎙️ Audio Analysis Agent<br><i>OpenAI Whisper STT + WPM & Fillers</i>"]
+        CandidateAnswer -->|"Typed Text"| LLMEval["⚖️ LLM Answer Evaluator<br><i>0-100 Score, Reasoning & Best Answer</i>"]
+        AudioAgent --> LLMEval
+    end
+
+    subgraph Phase5["🎓 Phase 5: Post-Interview Learning"]
+        Orch -->|"10 Questions Completed"| Learning["🎓 Learning Agent<br><i>Synthesize Custom Learning Plan</i>"]
+        Learning --> Complete(["🏆 Interview Complete<br><i>Final Session Report Delivered</i>"])
+    end
+
+    LLMEval -->|"Loop Next Question"| Orch
+
+    %% Modern Theme Styling
+    classDef startStyle fill:#1e40af,stroke:#3b82f6,stroke-width:2px,color:#ffffff;
+    classDef orchStyle fill:#4c1d95,stroke:#8b5cf6,stroke-width:2px,color:#ffffff;
+    classDef agentStyle fill:#065f46,stroke:#10b981,stroke-width:2px,color:#ffffff;
+    classDef evalStyle fill:#92400e,stroke:#f59e0b,stroke-width:2px,color:#ffffff;
+    classDef learnStyle fill:#6b21a8,stroke:#a855f7,stroke-width:2px,color:#ffffff;
+
+    class Start,Complete startStyle;
+    class Orch orchStyle;
+    class Resume,Tech,Followup,Scenario,Personality agentStyle;
+    class CandidateAnswer,AudioAgent,LLMEval evalStyle;
+    class Learning learnStyle;
 ```
 
 ---
