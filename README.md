@@ -22,7 +22,7 @@ The core engine is powered by **LangGraph** with 8 specialized AI agents working
 | **4** | **Follow-up Agent** | [`followup_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/followup_agent.py) | **Deep Probe Specialist**. Automatically triggered when a candidate's answer score is below 65% or incomplete. Probes deeper into weak technical areas to test true comprehension. |
 | **5** | **Scenario Agent** | [`scenario_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/scenario_agent.py) | **System Architecture & Situational Specialist**. Asks open-ended production trade-off, architectural design, and practical problem-solving scenarios based on the resume tech stack. |
 | **6** | **Personality Agent** | [`personality_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/personality_agent.py) | **Behavioral & HR Specialist**. Asks questions about past project challenges, team collaboration, leadership experience, and soft skills. |
-| **7** | **Learning Agent** | [`learning_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/learning_agent.py) | **Post-Interview Coach**. Runs when the interview completes (max questions reached). Sends candidate scores and weak areas to the LLM to generate a custom learning plan. |
+| **7** | **Learning Agent** | [`learning_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/learning_agent.py) | **Post-Interview Coach**. Runs when the interview completes (max questions reached). Synthesizes candidate scores and resume skill gaps to generate a personalized learning plan. |
 | **8** | **Audio Analysis Agent** | [`audio_analysis_agent.py`](file:///c:/Users/pande/Interview_Coach/backend/app/agents/audio_analysis_agent.py) | **Voice & Speech Analyst**. Processes recorded candidate voice responses off the main thread. Measures Speech Pace (WPM), counts filler words (`um`, `uh`, `like`), and computes clarity/confidence scores. |
 
 ---
@@ -81,45 +81,13 @@ Candidates can respond using either **typed text** or **spoken voice**:
 
 ---
 
-## 🎓 Learning Agent & Report State Flow
+## 🎓 Learning Agent & Report Flow
 
-Once 10 questions are completed, the Orchestrator routes state to the **Learning Agent** (`learning_agent.py`):
+Once 10 questions are completed, the Orchestrator marks the interview complete and triggers the **Learning Agent**:
 
-```python
-async def learning_node(state: dict, llm: LLMProvider) -> dict:
-    """Learning Agent — synthesizes weak areas and recommended resources."""
-    plan = await llm.generate_learning_plan(
-        state.get("scores_collected", []),
-        state.get("weak_areas", []),
-        state["target_role"],
-        state.get("resume_context", {}),
-    )
-    return {
-        "current_stage": "complete",
-        "weak_areas": plan.get("weak_areas", state.get("weak_areas", [])),
-        "learning_plan": plan,
-    }
-```
-
-### How the Learning Node State Flow Works:
-1. **LLM Prompt Construction**: The agent constructs a structured prompt sent directly to the LLM:
-   ```python
-   prompt = f"""
-   Create a personalized learning plan for a {target_role} candidate.
-   Resume context: {resume_context}
-   Session weak areas: {weak_areas}
-   Session scores: {scores}
-   Recommend resources for skills/projects gaps visible on their resume.
-   """
-   ```
-2. **State Return Keys (3 Update Values)**:
-   - `"current_stage": "complete"`: Tells the Orchestrator and graph state machine that the interview lifecycle is finished.
-   - `"weak_areas"`: Updates the graph state with the finalized list of weak candidate topics.
-   - `"learning_plan"`: Stores the full LLM JSON response containing `weak_areas` and `recommended_resources`.
-3. **Data Pipeline**:
-   - `learning_node` updates graph state → `InterviewGraph.complete_session()` returns plan.
-   - `sessions.py` saves `learning_plan` in transient store `_in_memory_learning_plans[session_id]`.
-   - `GET /api/sessions/{session_id}/report` endpoint reads stored plan and renders custom study resource cards on the candidate dashboard.
+- **Personalized Plan Generation**: The Learning Agent passes the candidate's target role, resume skills, session scores, and weak area history to the LLM to identify exact technical knowledge gaps.
+- **Structured Recommendations**: The AI synthesizes targeted study topics and recommended external links (documentation, guides, articles) specifically tailored to gaps identified during the interview.
+- **Dashboard Integration**: The generated learning plan is saved in session state and displayed on the candidate's **Session Report Page**, giving candidate-specific actionable steps to improve before real job interviews.
 
 ---
 
