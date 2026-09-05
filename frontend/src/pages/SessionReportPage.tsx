@@ -149,7 +149,7 @@ const MOCK_REPORTS: Record<string, any> = {
   }
 };
 
-function getFallbackBestAnswer(questionText: string, targetRole: string): string {
+function getFallbackBestAnswer(questionText: string, _targetRole?: string): string {
   const q = questionText.toLowerCase();
   
   if (q.includes('usememo') || q.includes('usecallback')) {
@@ -171,8 +171,18 @@ function getFallbackBestAnswer(questionText: string, targetRole: string): string
     return "Transformers use the self-attention mechanism to process input tokens in parallel, bypassing the sequential bottlenecks of RNNs. The dot-product attention computes compatibility scores between Query (Q), Key (K), and Value (V) matrices, allowing the model to focus on contextually relevant tokens regardless of distance.";
   }
 
-  // General fallback based on role
-  return `A high-quality response for this ${targetRole || 'Technical'} question should start by defining the core concept clearly, explaining the underlying mechanism or trade-offs involved, and providing a practical example from real-world application layouts.`;
+  if (q.includes('sql') || q.includes('database') || q.includes('index') || q.includes('query')) {
+    return "When optimizing database queries, I start by analyzing execution plans with EXPLAIN ANALYZE to identify sequential table scans and missing indexes. I introduce composite indexes aligned with WHERE/JOIN clauses, enforce connection pooling with pgbouncer, and implement read replicas with query batching to scale throughput.";
+  }
+  if (q.includes('docker') || q.includes('container') || q.includes('deploy') || q.includes('kubernetes')) {
+    return "For reliable deployments, I utilize multi-stage Docker builds to separate compilation from the minimal production runtime, drastically shrinking image size. I configure non-root users, define health/liveness probes, and implement rolling updates with automated canary analysis.";
+  }
+  if (q.includes('api') || q.includes('rest') || q.includes('endpoint')) {
+    return "A production-ready API incorporates strict schema validation, idempotent PUT/DELETE endpoints, token bucket rate limiting to prevent abuse, and structured JSON error responses with standard HTTP status codes. For high-volume microservices, I add circuit breakers and distributed tracing.";
+  }
+
+  const cleanQ = questionText.replace(/^\[.*?\]\s*/, '').replace(/^(Question \d+:|\d+\.)\s*/i, '').trim();
+  return `To answer "${cleanQ}" effectively: First define the architectural foundation and primary constraints. Next, explain your concrete implementation strategy and why you chose your specific approach over alternatives. Finally, discuss production trade-offs such as latency, memory consumption, fault tolerance, and observable metrics.`;
 }
 
 export default function SessionReportPage() {
@@ -234,9 +244,15 @@ function ReportContainer({ report }: { report: any }) {
           <span className="text-[10px] font-black text-teal-800 bg-teal-50 border border-teal-200 px-2.5 py-1 rounded-full uppercase tracking-widest self-start">
             Evaluation Report
           </span>
-          <div>
+          <div className="flex flex-col gap-2">
             <h2 className="text-lg font-black text-slate-900 tracking-tight leading-tight">{report.target_role}</h2>
-            <p className="text-[11px] text-slate-500 mt-1">Multi-agent feedback & AI analysis summary.</p>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-xs font-bold text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-md">
+                {report.attempts?.length || 0} Questions Answered
+              </span>
+              <span className="text-[11px] text-slate-400 font-medium">Per-Question Scores Below</span>
+            </div>
+            <p className="text-[11px] text-slate-500">Multi-agent feedback & AI analysis summary.</p>
           </div>
           <Link
             to="/dashboard"
@@ -312,17 +328,28 @@ function ReportContainer({ report }: { report: any }) {
                 </span>
                 <span className="text-xs font-black text-slate-800">Question {i + 1}</span>
               </div>
-              {a.filler_word_count != null && (
-                <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
-                  a.filler_word_count > 0 
-                    ? 'bg-amber-50 border-amber-200 text-amber-900' 
-                    : 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                }`}>
-                  {a.filler_word_count > 0 
-                    ? `⚠️ ${a.filler_word_count} filler words` 
-                    : '✓ No filler words'}
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {a.score != null && (
+                  <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
+                    a.score >= 75 ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
+                    a.score >= 50 ? 'bg-amber-50 border-amber-200 text-amber-800' :
+                    'bg-rose-50 border-rose-200 text-rose-800'
+                  }`}>
+                    Question Score: {Math.round(a.score)}/100
+                  </span>
+                )}
+                {a.filler_word_count != null && (
+                  <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                    a.filler_word_count > 0 
+                      ? 'bg-amber-50 border-amber-200 text-amber-900' 
+                      : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                  }`}>
+                    {a.filler_word_count > 0 
+                      ? `⚠️ ${a.filler_word_count} filler words` 
+                      : '✓ No filler words'}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Question Box */}
@@ -333,8 +360,57 @@ function ReportContainer({ report }: { report: any }) {
               </p>
             </div>
 
+            {/* Metrics Card */}
+            {a.metrics && typeof a.metrics === 'object' && Object.keys(a.metrics).length > 0 && (
+              <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3.5 flex flex-col gap-2">
+                <span className="text-[10px] font-bold text-indigo-800 uppercase tracking-wider">Evaluation Metrics</span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {Object.entries(a.metrics).map(([key, val]) => {
+                    const num = typeof val === 'number' ? val : Number(val) || 0;
+                    const safeKey = String(key).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+                    const pct = Math.max(0, Math.min(100, num * 10));
+                    return (
+                      <div key={key} className="bg-white border border-indigo-100 rounded-lg p-2 flex flex-col gap-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-slate-700 truncate">{safeKey}</span>
+                          <span className={`text-[10px] font-black ${num >= 8 ? 'text-emerald-700' : num >= 5 ? 'text-amber-700' : 'text-rose-700'}`}>{num.toFixed(1)}/10</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                          <div className={`h-full rounded-full ${num >= 8 ? 'bg-emerald-500' : num >= 5 ? 'bg-amber-500' : 'bg-rose-500'}`} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Weighted Breakdown Summary */}
+            {a.weighted_breakdown && typeof a.weighted_breakdown === 'object' && Object.keys(a.weighted_breakdown).length > 0 && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50/40 p-3.5 flex flex-col gap-2">
+                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Score Breakdown</span>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
+                  {Object.entries(a.weighted_breakdown)
+                    .filter(([k]) => !['weights'].includes(String(k)))
+                    .slice(0, 6)
+                    .map(([key, val]) => {
+                      const safeKey = String(key).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+                      const displayVal = typeof val === 'number' ? (val % 1 === 0 ? String(val) : val.toFixed(1)) : String(val);
+                      return (
+                        <div key={key} className="flex items-center justify-between bg-white border border-slate-100 rounded-md px-2 py-1">
+                          <span className="text-slate-600 font-semibold">{safeKey}</span>
+                          <span className={`font-black ${String(displayVal).startsWith('-') ? 'text-rose-600' : 'text-teal-700'}`}>
+                            {String(displayVal).startsWith('-') ? displayVal : `+${displayVal}`}
+                          </span>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+
             {/* Split Comparison Columns */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-4">
               
               {/* User Response Column */}
               <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3.5 flex flex-col gap-2">
@@ -344,22 +420,22 @@ function ReportContainer({ report }: { report: any }) {
                 </div>
               </div>
 
-              {/* Best Answer Example Column */}
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-3.5 flex flex-col gap-2">
-                <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Recommended Answer Example</span>
-                <div className="text-xs text-slate-800 leading-relaxed min-h-[70px] bg-white border border-emerald-200 rounded-lg p-3 font-sans">
-                  <ExpandableText text={a.best_answer || getFallbackBestAnswer(a.question_text, report.target_role)} maxLength={180} />
+              {/* Combined Feedback & Example Column */}
+              <div className="rounded-xl border border-teal-200 bg-teal-50/40 p-3.5 flex flex-col gap-2">
+                <span className="text-[10px] font-bold text-teal-800 uppercase tracking-wider">Detailed Feedback & Example</span>
+                <div className="text-xs text-slate-800 leading-relaxed space-y-3">
+                  {a.user_answer_comparison && (
+                    <ExpandableText text={a.user_answer_comparison} maxLength={220} className="text-xs text-slate-800 leading-relaxed" />
+                  )}
+                  {a.best_answer && (
+                    <div className="bg-white border border-teal-200/50 rounded-lg p-3 mt-1">
+                      <span className="block text-[10px] font-bold text-teal-700 uppercase tracking-wider mb-1">Recommended Approach</span>
+                      <ExpandableText text={a.best_answer || getFallbackBestAnswer(a.question_text, report.target_role)} maxLength={180} />
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
-
-            {/* Differences Feedback */}
-            {a.user_answer_comparison && (
-              <div className="rounded-xl border border-teal-200 bg-teal-50/40 p-3.5 flex flex-col gap-1.5">
-                <span className="text-[10px] font-bold text-teal-800 uppercase tracking-wider">Key differences &amp; feedback</span>
-                <ExpandableText text={a.user_answer_comparison} maxLength={220} className="text-xs text-slate-800 leading-relaxed" />
-              </div>
-            )}
 
             {/* Factual errors */}
             {a.factual_inaccuracies && a.factual_inaccuracies.length > 0 && (

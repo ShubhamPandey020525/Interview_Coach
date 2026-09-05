@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, UploadFile
 
@@ -9,9 +9,9 @@ from app.api.deps import get_current_user
 from app.core.exceptions import AppException
 from app.store import _in_memory_resumes, InMemoryModel, MockUser as User
 from app.schemas import ResumeProfileResponse
-from app.agents.resume_context import is_resume_context_sufficient
-from app.services.llm_provider import get_llm_provider
-from app.services.resume_parser import extract_text_from_file, parse_resume_locally
+from AI.agents.resume_context import is_resume_context_sufficient
+from AI.services.llm_provider import get_llm_provider
+from AI.services.resume_parser import extract_text_from_file, parse_resume_locally
 from app.services.storage_service import StorageService
 
 logger = logging.getLogger(__name__)
@@ -94,8 +94,8 @@ async def upload_resume(
         projects=parsed.get("projects", []),
         experience_summary=parsed.get("experience_summary", ""),
         skill_subtopics=parsed.get("skill_subtopics", {}),
-        parsed_at=datetime.utcnow(),
-        created_at=datetime.utcnow()
+        parsed_at=datetime.now(timezone.utc),
+        created_at=datetime.now(timezone.utc)
     )
     _in_memory_resumes[user.id] = profile
     return ResumeProfileResponse.model_validate(profile)

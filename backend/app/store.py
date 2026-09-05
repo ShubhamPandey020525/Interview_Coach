@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 class InMemoryModel:
     """Helper to store session details and attempts dynamically in memory."""
@@ -20,7 +20,7 @@ class MockUser:
         self.target_role = target_role
         self.experience_level = experience_level
         self.is_active = True
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
 
 # Seed standard UUID for demo user
 DEMO_USER_ID = uuid.UUID("9cc71b23-2008-49a2-b351-d85bcbb049af")

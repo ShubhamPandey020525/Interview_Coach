@@ -35,7 +35,23 @@ class StorageService:
         for subdir in ("resumes", "audio", "tts"):
             (self.media_root / subdir).mkdir(parents=True, exist_ok=True)
 
+    def _validate_resume_bytes(self, content: bytes, ext: str) -> None:
+        if ext == ".pdf":
+            if not content.startswith(b"%PDF-"):
+                raise AppException("INVALID_FILE_CONTENT", "File is not a valid PDF.", 415)
+        elif ext in {".docx", ".doc"}:
+            if not content.startswith(b"PK\x03\x04"):
+                raise AppException("INVALID_FILE_CONTENT", "File is not a valid DOCX.", 415)
+
     async def save_resume(self, file: UploadFile) -> str:
+        content = await file.read()
+        if len(content) > MAX_FILE_SIZE:
+            raise AppException("FILE_TOO_LARGE", "File exceeds maximum size of 5MB.", 413)
+        ext = Path(file.filename).suffix.lower() if file.filename else ""
+        if not ext:
+            ext = ALLOWED_RESUME_TYPES.get(file.content_type or "", ".bin")
+        self._validate_resume_bytes(content, ext)
+        await file.seek(0)
         return await self._save_file(file, "resumes", ALLOWED_RESUME_TYPES)
 
     async def save_audio(self, file: UploadFile) -> str:
@@ -78,10 +94,22 @@ class StorageService:
     def get_absolute_path(self, relative_path: str) -> Path:
         if not relative_path:
             return self.media_root
-        if os.path.isabs(relative_path):
-            return Path(relative_path)
+        
         norm_path = relative_path.replace("\\", "/")
         if norm_path.startswith("media/"):
-            return self.media_root.parent / norm_path
-        return self.media_root / norm_path.replace("media/", "")
+            combined_path = self.media_root.parent / norm_path
+        elif os.path.isabs(relative_path):
+            combined_path = Path(relative_path)
+        else:
+            combined_path = self.media_root / norm_path.replace("media/", "")
+
+        try:
+            resolved_path = combined_path.resolve()
+            resolved_media_root = self.media_root.resolve()
+            if not str(resolved_path).startswith(str(resolved_media_root)):
+                raise AppException("INVALID_PATH", "Path traversal attempt detected.", 403)
+        except Exception:
+            raise AppException("INVALID_PATH", "Invalid path provided.", 400)
+            
+        return resolved_path
 

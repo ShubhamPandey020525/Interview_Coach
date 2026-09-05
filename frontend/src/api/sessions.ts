@@ -38,7 +38,11 @@ export async function submitAnswer(
   const form = new FormData();
   form.append('attempt_id', attemptId);
   if (answerText) form.append('answer_text', answerText);
-  if (audio) form.append('audio', audio, 'recording.webm');
+  if (audio) {
+    const ext = audio.type.includes('mp4') ? 'mp4' : audio.type.includes('wav') ? 'wav' : audio.type.includes('ogg') ? 'ogg' : 'webm';
+    const filename = `recording.${ext}`;
+    form.append('audio', audio, filename);
+  }
   const res = await api.post<AnswerResponse>(`/api/sessions/${sessionId}/answer`, form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });

@@ -19,6 +19,8 @@ import {
   buildClosingSpeech,
 } from '../utils/interviewScript';
 
+const IS_EDGE = /(?:edg|edga|edgios|edge)\//i.test(typeof navigator !== 'undefined' ? navigator.userAgent : '');
+
 type FlowPhase = 'idle' | 'starting' | 'speaking' | 'listening' | 'submitting' | 'thinking' | 'completed';
 
 const SKIP_ANSWER_TEXT = 'No answer response was provided.';
@@ -41,6 +43,7 @@ export default function InterviewConsolePage() {
     queryKey: ['session', sessionId],
     queryFn: () => getSession(sessionId!),
     enabled: !!sessionId,
+    staleTime: 30000,
   });
 
   const { speak, stop: stopSpeaking, prime: primeSpeech } = useSpeechSynthesis();
@@ -54,6 +57,11 @@ export default function InterviewConsolePage() {
   const [userTranscript, setUserTranscript] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [isLastQuestionAnswered, setIsLastQuestionAnswered] = useState(false);
+  const [hasAnsweredCurrentQuestion, setHasAnsweredCurrentQuestion] = useState(false);
+  const [hasInterviewStarted, setHasInterviewStarted] = useState(false);
+
+  const startingTimeoutRef = useRef<number | null>(null);
+  const autoStartRef = useRef(false);
 
   const lastAttemptRef = useRef<string | null>(null);
   const lastSpokenAttemptRef = useRef<string | null>(null);
@@ -62,113 +70,387 @@ export default function InterviewConsolePage() {
   const attemptRef = useRef<string | null>(null);
   const phaseRef = useRef<FlowPhase>('idle');
   const questionNumberRef = useRef(0);
-
   const submitPendingRef = useRef(false);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
-
-  const stopAudioPlayback = useCallback(() => {
-    if (audioElementRef.current) {
-      audioElementRef.current.pause();
-      audioElementRef.current.currentTime = 0;
-      audioElementRef.current = null;
-    }
-    stopSpeaking();
-  }, [stopSpeaking]);
+  const audioCtxUnlockRef = useRef<AudioContext | null>(null);
+  const deliverLockRef = useRef(false);
+  const playGuardRef = useRef<number | null>(null);
+  const autoNextRef = useRef(false);
+  const cancelledDeliveryRef = useRef(false);
 
   useEffect(() => {
-
     phaseRef.current = phase;
   }, [phase]);
 
-  // Sync speech recognition liveText to userTranscript editable state while listening
   useEffect(() => {
-    if (phase === 'listening') {
+    if (phase === 'listening' && recognition.liveText && recognition.liveText.trim()) {
       setUserTranscript(recognition.liveText);
     }
   }, [recognition.liveText, phase]);
 
   const addLine = useCallback((line: Omit<TimelineLine, 'id'>) => {
-    setLines((prev) => [...prev, { ...line, id: crypto.randomUUID() }]);
+    setLines((prev) => {
+      try {
+        const uuid = (globalThis as any).crypto?.randomUUID
+          ? (globalThis as any).crypto.randomUUID()
+          : `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+        return [...prev, { ...line, id: uuid }];
+      } catch {
+        return [...prev, { ...line, id: `${Date.now()}` }];
+      }
+    });
   }, []);
 
-  // --- Handle new question ---
+  useEffect(() => {
+    if (lastEvaluation && lastEvaluation.score != null) {
+      const qScore = Math.round(lastEvaluation.question_score ?? lastEvaluation.score);
+      const metrics = (lastEvaluation as any).metrics;
+      let metricsText = '';
+      if (metrics && typeof metrics === 'object' && Object.keys(metrics).length > 0) {
+        const items = Object.entries(metrics)
+          .slice(0, 4)
+          .map(([k, v]) => `• ${String(k).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}: ${typeof v === 'number' ? v.toFixed(1) : v}/10`);
+        metricsText = `\n\nEvaluation Metrics:\n${items.join('\n')}`;
+      } else if (lastEvaluation.signals && lastEvaluation.signals.length > 0) {
+        const sigs = lastEvaluation.signals
+          .map((s) => `• ${s.type.toUpperCase()}: ${Math.round(s.score)}/100`);
+        metricsText = `\n\nEvaluation Metrics:\n${sigs.join('\n')}`;
+      }
+
+      addLine({
+        role: 'system',
+        text: `📊 Question Score: ${qScore}/100${metricsText}`,
+        meta: 'Question Evaluation',
+      });
+    }
+  }, [lastEvaluation, addLine]);
+
+  const stopAudioPlayback = useCallback(() => {
+    cancelledDeliveryRef.current = true;
+    if (playGuardRef.current) {
+      try { window.clearInterval(playGuardRef.current); } catch {}
+      playGuardRef.current = null;
+    }
+    const el = audioElementRef.current;
+    if (el) {
+      try {
+        el.onplay = null;
+        el.onended = null;
+        el.onerror = null;
+        el.onstalled = null;
+        el.onpause = null;
+        el.oncanplay = null;
+        el.onwaiting = null;
+        try { el.pause(); } catch {}
+        try {
+          el.src = '';
+          el.removeAttribute('src');
+          el.load();
+        } catch {}
+      } catch {}
+      audioElementRef.current = null;
+    }
+    try { stopSpeaking(); } catch {}
+  }, [stopSpeaking]);
+
+  const unlockAudioContext = useCallback(() => {
+    try {
+      if (!audioCtxUnlockRef.current || audioCtxUnlockRef.current.state === 'closed') {
+        const AC = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AC) return;
+        try {
+          audioCtxUnlockRef.current = new AC({ sampleRate: 44100 });
+        } catch {
+          try { audioCtxUnlockRef.current = new AC(); } catch {}
+        }
+      }
+      if (audioCtxUnlockRef.current && audioCtxUnlockRef.current.state === 'suspended') {
+        try { void audioCtxUnlockRef.current.resume(); } catch {}
+      }
+      if (audioCtxUnlockRef.current) {
+        try {
+          const buf = audioCtxUnlockRef.current.createBuffer(1, 1, 44100);
+          const src = audioCtxUnlockRef.current.createBufferSource();
+          src.buffer = buf;
+          src.connect(audioCtxUnlockRef.current.destination);
+          try { src.start(0); } catch {}
+        } catch {}
+      }
+      // Edge audio element unlock via minimal silent audio data
+      try {
+        const a = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+        a.volume = 0;
+        void a.play().then(() => {
+          try { a.pause(); } catch {}
+        }).catch(() => {});
+      } catch {}
+    } catch {}
+  }, []);
+
   const deliverQuestion = useCallback(
     (attemptId: string, rawText: string, agentType: string, _qNum: number, audioUrl?: string | null) => {
+      cancelledDeliveryRef.current = false;
       const displayText = formatQuestionDisplay(rawText);
       const isNewQuestion = attemptId !== lastSpokenAttemptRef.current;
       lastAttemptRef.current = attemptId;
 
       if (isNewQuestion) {
         lastSpokenAttemptRef.current = attemptId;
+        setHasAnsweredCurrentQuestion(false);
         addLine({ role: 'interviewer', text: displayText, meta: agentType });
       }
 
       attemptRef.current = attemptId;
 
-      const speechText = formatQuestionDisplay(rawText);
-      const targetPath = audioUrl || `/media/tts/${attemptId}.mp3`;
-      const cleanPath = targetPath.startsWith('/') ? targetPath : `/${targetPath}`;
-      const backendOrigin = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
-      const fullBackendUrl = `${backendOrigin.replace(/\/$/, '')}${cleanPath}`;
+      if (deliverLockRef.current) return;
+      deliverLockRef.current = true;
 
-      // If currently playing the exact same audio, let it continue uninterrupted
-      if (audioElementRef.current && audioElementRef.current.src === fullBackendUrl && !audioElementRef.current.paused) {
+      const speechText = formatQuestionDisplay(rawText);
+      const backendOrigin = (import.meta as any).env?.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+      const getFullUrl = (path: string) => {
+        const cleanPath = path.startsWith('/') ? path : `/${path}`;
+        return `${backendOrigin.replace(/\/$/, '')}${cleanPath}`;
+      };
+      const targetPath = audioUrl || `/media/tts/${attemptId}.mp3`;
+      const fullBackendUrl = getFullUrl(targetPath);
+      const cleanPath = targetPath.startsWith('/') ? targetPath : `/${targetPath}`;
+
+      unlockAudioContext();
+
+      if (audioElementRef.current
+        && audioElementRef.current.src
+        && (audioElementRef.current.src === fullBackendUrl || audioElementRef.current.src.includes(targetPath))
+        && !audioElementRef.current.paused) {
+        deliverLockRef.current = false;
         return;
       }
 
-      // Stop any existing audio
       stopAudioPlayback();
-      audio.releaseMicForSpeech();
+      cancelledDeliveryRef.current = false;
+      try { audio.releaseMicForSpeech(); } catch {}
+
+      const finishIdle = () => {
+        if (phaseRef.current === 'speaking') setPhase('idle');
+        deliverLockRef.current = false;
+      };
 
       const fallbackToSpeech = () => {
+        if (cancelledDeliveryRef.current) { deliverLockRef.current = false; return; }
+        const el = audioElementRef.current;
+        if (el) {
+          try {
+            el.onplay = null;
+            el.onended = null;
+            el.onerror = null;
+            el.onstalled = null;
+            el.onpause = null;
+            el.pause();
+            el.src = '';
+            try { el.load(); } catch {}
+          } catch {}
+          audioElementRef.current = null;
+        }
+        if (cancelledDeliveryRef.current) { deliverLockRef.current = false; return; }
         speak(speechText, {
           onStart: () => setPhase('speaking'),
-          onEnd: () => setPhase('idle'),
-          onError: () => setPhase('idle'),
+          onEnd: finishIdle,
+          onError: finishIdle,
         });
       };
 
-      // Try full backend URL first for direct file access
-      const audioEl = new Audio(fullBackendUrl);
-      audioElementRef.current = audioEl;
+      const playAudioUrl = (url: string, onError: () => void) => {
+        if (cancelledDeliveryRef.current) { onError(); return; }
+        if (playGuardRef.current) {
+          try { window.clearInterval(playGuardRef.current); } catch {}
+          playGuardRef.current = null;
+        }
+        let audioEl = audioElementRef.current;
+        if (!audioEl) {
+          try {
+            audioEl = new Audio();
+            audioEl.preload = 'auto';
+            try { (audioEl as any).crossOrigin = 'anonymous'; } catch {}
+            try { audioEl.setAttribute('playsinline', 'true'); } catch {}
+            try { audioEl.setAttribute('webkit-playsinline', 'true'); } catch {}
+            try { audioEl.setAttribute('preload', 'auto'); } catch {}
+            try { (audioEl as any).autoplay = false; } catch {}
+            audioElementRef.current = audioEl;
+          } catch {
+            onError();
+            return;
+          }
+        }
 
-      audioEl.onplay = () => setPhase('speaking');
-      audioEl.onended = () => {
-        setPhase('idle');
-        audioElementRef.current = null;
-      };
-      audioEl.onerror = () => {
-        // Fallback to relative cleanPath or Web Speech API
-        const retryEl = new Audio(cleanPath);
-        audioElementRef.current = retryEl;
-        retryEl.onplay = () => setPhase('speaking');
-        retryEl.onended = () => {
-          setPhase('idle');
-          audioElementRef.current = null;
+        let finished = false;
+        const doneOk = () => {
+          if (finished) return;
+          finished = true;
+          if (playGuardRef.current) {
+            try { window.clearInterval(playGuardRef.current); } catch {}
+            playGuardRef.current = null;
+          }
+          finishIdle();
         };
-        retryEl.onerror = () => {
-          audioElementRef.current = null;
-          fallbackToSpeech();
+        const doneErr = () => {
+          if (finished) return;
+          finished = true;
+          if (playGuardRef.current) {
+            try { window.clearInterval(playGuardRef.current); } catch {}
+            playGuardRef.current = null;
+          }
+          onError();
         };
-        retryEl.play().catch(() => fallbackToSpeech());
+
+        try {
+          audioEl.onplay = () => {
+            setPhase('speaking');
+            unlockAudioContext();
+          };
+          audioEl.onended = doneOk;
+          audioEl.oncanplay = () => {
+            try {
+              if (audioEl && !audioEl.paused) return;
+              const p = audioEl?.play();
+              if (p && typeof (p as any).catch === 'function') {
+                (p as any).catch(() => doneErr());
+              }
+            } catch {}
+          };
+          audioEl.onpause = () => {
+            const cur = audioElementRef.current;
+            if (cur && (cur.ended || (cur.duration && cur.currentTime >= (cur.duration || 0) - 0.05))) {
+              doneOk();
+            }
+          };
+          audioEl.onerror = () => doneErr();
+          audioEl.onstalled = () => {
+            try { audioEl?.load(); } catch {}
+            try {
+              const p = audioEl?.play();
+              if (p && typeof (p as any).catch === 'function') {
+                (p as any).catch(() => {});
+              }
+            } catch {}
+          };
+          audioEl.onwaiting = () => {
+            try { audioEl?.load(); } catch {}
+          };
+        } catch {
+          doneErr();
+          return;
+        }
+
+        try {
+          const cacheBust = url.includes('?') ? `&_=${Date.now()}` : `?_=${Date.now()}`;
+          audioEl.src = url + cacheBust;
+          try { audioEl.load(); } catch {}
+        } catch {
+          doneErr();
+          return;
+        }
+
+        const playPromise = audioEl.play();
+        if (playPromise && typeof playPromise.catch === 'function') {
+          playPromise.catch(() => {
+            try {
+              audioEl?.load();
+              const p2 = audioEl?.play();
+              if (p2 && typeof (p2 as any).catch === 'function') {
+                (p2 as any).catch(() => doneErr());
+              }
+            } catch {
+              doneErr();
+            }
+          });
+        }
+
+        const estMs = Math.max(5000, speechText.length * 70 + 3000);
+        let lastT = 0;
+        let stuckCycles = 0;
+        let startMs = Date.now();
+        (window as any).__audioStart = startMs;
+        playGuardRef.current = window.setInterval(() => {
+          const cur = audioElementRef.current;
+          if (!cur) {
+            if (playGuardRef.current) {
+              try { window.clearInterval(playGuardRef.current); } catch {}
+              playGuardRef.current = null;
+            }
+            return;
+          }
+          const nowT = cur.currentTime || 0;
+          const dur = cur.duration || 0;
+          if (cur.ended || (dur > 0 && nowT >= dur - 0.05)) {
+            if (playGuardRef.current) {
+              try { window.clearInterval(playGuardRef.current); } catch {}
+              playGuardRef.current = null;
+            }
+            doneOk();
+            return;
+          }
+          if (nowT === lastT && nowT > 0) stuckCycles++; else stuckCycles = 0;
+          lastT = nowT;
+          const elapsed = Date.now() - startMs;
+          if (stuckCycles >= 4) {
+            try { cur.currentTime = Math.min((cur.currentTime || 0) + 0.1, Math.max((cur.duration || 0) - 0.1, 0)); } catch {}
+            try {
+              const p = cur.play();
+              if (p && typeof (p as any).catch === 'function') (p as any).catch(() => {});
+            } catch {}
+            stuckCycles = 0;
+          }
+          if (elapsed > estMs + (IS_EDGE ? 8000 : 5000)) {
+            doneOk();
+          }
+          if (elapsed > estMs * 1.5 + 10000) {
+            doneOk();
+          }
+        }, IS_EDGE ? 700 : 600);
       };
 
       setPhase('speaking');
-      audioEl.play().catch(() => {
-        fallbackToSpeech();
+
+      playAudioUrl(fullBackendUrl, () => {
+        if (cancelledDeliveryRef.current) { deliverLockRef.current = false; return; }
+        playAudioUrl(cleanPath, () => {
+          if (cancelledDeliveryRef.current) { deliverLockRef.current = false; return; }
+          fallbackToSpeech();
+        });
       });
     },
-    [addLine, audio, stopAudioPlayback, speak]
+    [addLine, audio, stopAudioPlayback, speak, unlockAudioContext]
   );
-
-  // --- Manual control handlers ---
 
   const handleStartInterview = useCallback(() => {
     if (phaseRef.current !== 'idle') return;
+    unlockAudioContext();
     primeSpeech();
+    setHasInterviewStarted(true);
+    setErrorMessage('');
+
+    const trulyDisconnected =
+      connectionStatus === 'disconnected';
+
+    if (trulyDisconnected) {
+      reconnectNow();
+    }
     setPhase('starting');
 
+    if (startingTimeoutRef.current) {
+      try { window.clearTimeout(startingTimeoutRef.current); } catch {}
+    }
+    startingTimeoutRef.current = window.setTimeout(() => {
+      if (phaseRef.current === 'starting') {
+        setPhase('idle');
+        setErrorMessage('Could not load question. Please click "Start Interview" again or check connection.');
+      }
+    }, 15000);
+
     if (currentQuestion) {
+      if (startingTimeoutRef.current) {
+        try { window.clearTimeout(startingTimeoutRef.current); } catch {}
+        startingTimeoutRef.current = null;
+      }
       questionNumberRef.current = 1;
       setQuestionNumber(1);
       deliverQuestion(
@@ -178,11 +460,57 @@ export default function InterviewConsolePage() {
         1,
         currentQuestion.audio_url
       );
+    } else {
+      void (async () => {
+        try {
+          await requestNextQuestion();
+        } catch (e) {
+          setErrorMessage(getErrorMessage(e));
+          setPhase('idle');
+        }
+      })();
     }
-  }, [primeSpeech, currentQuestion, deliverQuestion]);
+  }, [primeSpeech, currentQuestion, deliverQuestion, connectionStatus, reconnectNow, unlockAudioContext, requestNextQuestion]);
+
+  useEffect(() => {
+    if (autoStartRef.current) return;
+    try {
+      const flag = sessionStorage.getItem('interview_auto_start');
+      if (flag !== '1') return;
+    } catch {
+      return;
+    }
+    autoStartRef.current = true;
+    try {
+      sessionStorage.removeItem('interview_auto_start');
+    } catch {}
+
+    const tryStart = () => {
+      if (phaseRef.current !== 'idle') return false;
+      handleStartInterview();
+      return true;
+    };
+
+    const run = async () => {
+      await new Promise((r) => window.setTimeout(r, 300));
+      if (tryStart()) return;
+
+      let tries = 0;
+      const maxTries = 15;
+      const iv = window.setInterval(() => {
+        tries++;
+        if (tryStart() || tries >= maxTries) {
+          try { window.clearInterval(iv); } catch {}
+        }
+      }, 400);
+    };
+
+    void run();
+  }, [handleStartInterview]);
 
   const handleReadQuestion = useCallback(() => {
     if (!currentQuestion) return;
+    unlockAudioContext();
     primeSpeech();
     deliverQuestion(
       currentQuestion.attempt_id,
@@ -191,23 +519,24 @@ export default function InterviewConsolePage() {
       questionNumberRef.current || 1,
       currentQuestion.audio_url
     );
-  }, [currentQuestion, deliverQuestion, primeSpeech]);
+  }, [currentQuestion, deliverQuestion, primeSpeech, unlockAudioContext]);
 
-
-  const handleStartRecording = useCallback(() => {
+  const handleStartRecording = useCallback(async () => {
     if (phaseRef.current !== 'speaking' && phaseRef.current !== 'idle') return;
     stopAudioPlayback();
-    // Start audio recording and live speech recognition (if supported).
-    audio.startRecording().catch(() => {});
+    unlockAudioContext();
+    setErrorMessage('');
     try {
       recognition.resetTranscript();
       recognition.startListening();
-    } catch {
-      // ignore if browser does not support Web Speech API
-    }
+    } catch {}
     setPhase('listening');
-  }, [stopAudioPlayback, audio, recognition]);
-
+    try {
+      await audio.startRecording();
+    } catch (err: any) {
+      console.warn('Microphone recording warning:', err);
+    }
+  }, [stopAudioPlayback, audio, recognition, unlockAudioContext]);
 
   const performSubmit = useCallback(
     async (blob: Blob | null, textArg?: string) => {
@@ -218,24 +547,31 @@ export default function InterviewConsolePage() {
         const answerText = (textArg !== undefined ? textArg : userTranscript).trim();
 
         if (blob && blob.size > 0) {
-          await submitAnswer(sessionId, attemptId, answerText, blob);
+          await submitAnswer(sessionId, attemptId, answerText || undefined, blob);
         } else if (answerText) {
           await submitAnswer(sessionId, attemptId, answerText);
         } else {
-          await submitAnswer(sessionId, attemptId, SKIP_ANSWER_TEXT);
+          setErrorMessage('Please speak your answer into the microphone or type it before submitting.');
+          setPhase('idle');
+          submittingRef.current = false;
+          submitPendingRef.current = false;
+          return;
         }
 
-        const displayLabel = answerText || (blob && blob.size > 0 ? '🎤 Spoken Audio Recorded (Transcribing...)' : SKIP_ANSWER_TEXT);
+        const displayLabel = answerText || (blob && blob.size > 0 ? '🎤 Spoken Audio Response' : 'Answer submitted');
         addLine({ role: 'candidate', text: displayLabel, meta: blob ? 'Audio' : 'Text' });
 
         audio.reset();
         setUserTranscript('');
+        setHasAnsweredCurrentQuestion(true);
 
         if (questionNumberRef.current >= MAX_QUESTIONS) {
           setPhase('idle');
           setIsLastQuestionAnswered(true);
+          autoNextRef.current = false;
         } else {
           setPhase('idle');
+          autoNextRef.current = true;
         }
       } catch (err) {
         setErrorMessage(getErrorMessage(err));
@@ -255,75 +591,75 @@ export default function InterviewConsolePage() {
 
     if (!sessionId || !attemptId || submittingRef.current || !isValidPhase) return;
 
+    const answerText = (userTranscript.trim() || recognition.liveText.trim() || (recognition.transcript || '').trim());
+    const hasAudio = audio.isRecording || (audio.audioBlob && audio.audioBlob.size > 0);
+
+    if (!answerText && !hasAudio) {
+      setErrorMessage('Please speak your answer into the microphone or type it before submitting.');
+      return;
+    }
+
     submittingRef.current = true;
     setPhase('submitting');
-
-    const answerText = userTranscript.trim();
+    setErrorMessage('');
 
     let recordedBlob: Blob | null = null;
     if (audio.isRecording) {
-      try {
-        recordedBlob = await audio.stopRecording();
-      } catch {}
+      try { recordedBlob = await audio.stopRecording(); } catch {}
     }
-    try {
-      recognition.stopListening();
-    } catch {}
+    if (!recordedBlob && audio.audioBlob && audio.audioBlob.size > 0) {
+      recordedBlob = audio.audioBlob;
+    }
+    try { recognition.stopListening(); } catch {}
 
     await performSubmit(recordedBlob, answerText);
   }, [sessionId, userTranscript, audio, recognition, performSubmit]);
 
   const handleEndInterview = useCallback(async () => {
+    cancelledDeliveryRef.current = true;
+    (window as any).__cancelledDelivery = true;
     stopAudioPlayback();
-    try {
-      recognition.stopListening();
-    } catch {}
+    try { recognition.stopListening(); } catch {}
     audio.reset();
     if (sessionId) {
-      try {
-        await completeSession(sessionId);
-      } catch {}
+      try { await completeSession(sessionId); } catch {}
       navigate(`/sessions/${sessionId}/report`);
     }
   }, [stopAudioPlayback, audio, sessionId, navigate, recognition]);
 
   const handleGenerateReport = useCallback(async () => {
+    cancelledDeliveryRef.current = true;
+    (window as any).__cancelledDelivery = true;
     setPhase('completed');
     stopAudioPlayback();
     audio.releaseMicForSpeech();
+    const finishNav = async () => {
+      try { await completeSession(sessionId!); } catch {}
+      navigate(`/sessions/${sessionId}/report`);
+    };
     speak(buildClosingSpeech(), {
-      onEnd: async () => {
-        try {
-          await completeSession(sessionId!);
-        } catch {}
-        navigate(`/sessions/${sessionId}/report`);
-      },
-      onError: async () => {
-        try {
-          await completeSession(sessionId!);
-        } catch {}
-        navigate(`/sessions/${sessionId}/report`);
-      },
+      onEnd: finishNav,
+      onError: finishNav,
     });
   }, [stopAudioPlayback, audio, sessionId, navigate, speak]);
 
-
-
-  // Auto-deliver when new question arrives from LLM (after consent)
   useEffect(() => {
     if (!currentQuestion) return;
     if (currentQuestion.attempt_id === lastSpokenAttemptRef.current) return;
     if (phaseRef.current === 'submitting') return;
-    if (phaseRef.current === 'idle') return; // Do not speak automatically if interview has not started
+    if (phaseRef.current === 'thinking') return;
+    if (phaseRef.current === 'listening') return;
+    if (phaseRef.current === 'idle' && !hasInterviewStarted) return;
 
-    // Stop any in-progress recording before speaking the next question
-    if (phaseRef.current === 'listening') {
-      audio.releaseMicForSpeech();
+    if (startingTimeoutRef.current) {
+      try { window.clearTimeout(startingTimeoutRef.current); } catch {}
+      startingTimeoutRef.current = null;
     }
 
-    const seqNum = (currentQuestion as any).sequence_number || (questionNumberRef.current ? questionNumberRef.current + 1 : 1);
+    const seqNum = currentQuestion.sequence_number || questionNumberRef.current || 1;
     questionNumberRef.current = seqNum;
     setQuestionNumber(seqNum);
+    autoNextRef.current = false;
     deliverQuestion(
       currentQuestion.attempt_id,
       currentQuestion.question_text,
@@ -331,20 +667,31 @@ export default function InterviewConsolePage() {
       questionNumberRef.current,
       currentQuestion.audio_url
     );
-  }, [currentQuestion, deliverQuestion, audio]);
+  }, [currentQuestion, deliverQuestion, audio, hasInterviewStarted]);
 
   useEffect(() => {
     if (!lastEvaluation) return;
 
-    if (lastEvaluation.transcript && lastEvaluation.transcript !== 'No answer response was provided.') {
+    if (
+      lastEvaluation.transcript &&
+      lastEvaluation.transcript !== SKIP_ANSWER_TEXT &&
+      !lastEvaluation.transcript.includes('No speech detected') &&
+      !lastEvaluation.transcript.includes('No answer response')
+    ) {
       setLines((prev) => {
         const nextLines = [...prev];
         for (let i = nextLines.length - 1; i >= 0; i--) {
           if (nextLines[i].role === 'candidate') {
-            nextLines[i] = {
-              ...nextLines[i],
-              text: lastEvaluation.transcript || 'No speech captured.',
-            };
+            if (
+              nextLines[i].text.startsWith('🎤') ||
+              nextLines[i].text === 'Answer submitted' ||
+              nextLines[i].text === SKIP_ANSWER_TEXT
+            ) {
+              nextLines[i] = {
+                ...nextLines[i],
+                text: lastEvaluation.transcript!,
+              };
+            }
             break;
           }
         }
@@ -355,46 +702,61 @@ export default function InterviewConsolePage() {
     const key = `${lastEvaluation.score}-${lastEvaluation.signals.map((s) => s.notes).join('|')}-${lastEvaluation.transcript || ''}`;
     if (lastEvalRef.current === key) return;
     lastEvalRef.current = key;
-    setPhase('idle'); // Ready for next question, or completion
-  }, [lastEvaluation]);
+    setPhase('idle');
+
+    if (autoNextRef.current && questionNumberRef.current < MAX_QUESTIONS && !sessionComplete) {
+      const t = window.setTimeout(() => {
+        if (phaseRef.current === 'idle') {
+          setPhase('thinking');
+          void requestNextQuestion().catch(() => setPhase('idle'));
+        }
+      }, IS_EDGE ? 1200 : 900);
+      return () => {
+        try { window.clearTimeout(t); } catch {}
+      };
+    }
+  }, [lastEvaluation, requestNextQuestion, sessionComplete]);
 
   useEffect(() => {
     if (!sessionComplete || !sessionId) return;
     setPhase('completed');
+    cancelledDeliveryRef.current = true;
+    (window as any).__cancelledDelivery = true;
 
     const finish = async () => {
       stopAudioPlayback();
       audio.releaseMicForSpeech();
+      const finishNav = async () => {
+        try { await completeSession(sessionId); } catch {}
+        navigate(`/sessions/${sessionId}/report`);
+      };
       speak(buildClosingSpeech(), {
-        onEnd: async () => {
-          try {
-            await completeSession(sessionId);
-          } catch {}
-          navigate(`/sessions/${sessionId}/report`);
-        },
-        onError: async () => {
-          try {
-            await completeSession(sessionId);
-          } catch {}
-          navigate(`/sessions/${sessionId}/report`);
-        },
+        onEnd: finishNav,
+        onError: finishNav,
       });
     };
-    finish();
+    void finish();
   }, [sessionComplete, navigate, sessionId, stopAudioPlayback, audio, speak]);
 
   useEffect(() => {
     return () => {
+      cancelledDeliveryRef.current = true;
+      (window as any).__cancelledDelivery = true;
       stopAudioPlayback();
-      try {
-        recognition.stopListening();
-      } catch {}
+      if (startingTimeoutRef.current) {
+        try { window.clearTimeout(startingTimeoutRef.current); } catch {}
+      }
+      try { recognition.stopListening(); } catch {}
       audio.reset();
+      deliverLockRef.current = false;
+      if (playGuardRef.current) {
+        try { window.clearInterval(playGuardRef.current); } catch {}
+        playGuardRef.current = null;
+      }
     };
   }, [stopAudioPlayback, audio, recognition]);
 
-
-  const displayQuestion = currentQuestion
+  const displayQuestion = currentQuestion && questionNumber > 0
     ? formatQuestionDisplay(currentQuestion.question_text)
     : null;
 
@@ -423,7 +785,6 @@ export default function InterviewConsolePage() {
   return (
     <div className="interview-focus flex-1 w-full h-full flex flex-col overflow-hidden bg-gradient-to-b from-slate-50 via-teal-50/20 to-slate-50 text-slate-800 p-4 md:p-6 box-border">
       <div className="mx-auto flex h-full w-full max-w-6xl flex-col overflow-hidden">
-        {/* Header */}
         <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
           <div className="min-w-0">
             <h1 className="truncate text-base font-extrabold text-slate-900 tracking-tight">AI Voice Interview Studio</h1>
@@ -443,19 +804,25 @@ export default function InterviewConsolePage() {
           </div>
         )}
 
-        {/* Main content */}
+        {(recognition.errorMsg || audio.errorMsg) && (
+          <div className="mb-2 shrink-0 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800 font-semibold shadow-xs">
+            ℹ️ {recognition.errorMsg || audio.errorMsg}
+          </div>
+        )}
+
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
-          {/* Top: Persona + question */}
           <div className="shrink-0 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-xl shadow-slate-200/50 backdrop-blur-md">
             <div className="flex gap-4">
               <div className="shrink-0">
                 <InterviewerPersona status={aiStatus} statusLabel={aiStatusLabel} compact />
               </div>
               <div className="min-w-0 flex-1">
-                <StageProgress
-                  currentStage={currentQuestion?.agent_type || null}
-                  questionNumber={questionNumber}
-                />
+                {questionNumber > 0 && (
+                  <StageProgress
+                    currentStage={currentQuestion?.agent_type || null}
+                    questionNumber={questionNumber}
+                  />
+                )}
                 <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 shadow-inner">
                   {displayQuestion ? (
                     <>
@@ -488,13 +855,12 @@ export default function InterviewConsolePage() {
             </div>
           </div>
 
-          {/* Middle: Voice Answer + Controls */}
           <div className="flex min-h-0 flex-1 flex-col gap-2">
             <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-hidden lg:grid-cols-5">
               <div className="flex min-h-0 flex-col overflow-hidden lg:col-span-3">
-                <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xl shadow-slate-200/50">
+                <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-slate-200/90 bg-white shadow-xl shadow-slate-200/50">
                   <AudioOnlyPanel
-                    isRecording={audio.isRecording}
+                    isRecording={audio.isRecording || phase === 'listening'}
                     isSpeaking={phase === 'speaking'}
                     isProcessing={phase === 'submitting' || phase === 'thinking'}
                     audioLevel={audio.audioLevel}
@@ -509,22 +875,39 @@ export default function InterviewConsolePage() {
                     onSpeechLangChange={recognition.setLang}
                   />
                 </div>
-                {/* Control buttons */}
-                <div className="mt-2 flex shrink-0 gap-2 justify-center">
-                  {phase === 'idle' && !lastSpokenAttemptRef.current && (
+                <div className="mt-2 flex shrink-0 gap-2 justify-center flex-wrap">
+                  {phase === 'idle' && !hasInterviewStarted && (
                     <button
                       onClick={handleStartInterview}
-                      className="rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 px-6 py-2.5 text-xs font-black text-white shadow-lg shadow-teal-600/20 transition-all transform active:scale-95 cursor-pointer"
+                      className="rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 px-6 py-2.5 text-xs font-black text-white shadow-lg shadow-teal-600/20 transition-all transform active:scale-95 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      Start Interview
+                      {connectionStatus === 'connected'
+                        ? '🚀 Start Interview'
+                        : connectionStatus === 'connecting'
+                          ? '🔗 Connecting... Click to Start'
+                          : connectionStatus === 'reconnecting'
+                            ? '⟳ Reconnecting... Click to Start'
+                            : '🔌 Disconnected — Click to Reconnect & Start'}
                     </button>
                   )}
 
-                  {phase === 'idle' && lastSpokenAttemptRef.current && !sessionComplete && !isLastQuestionAnswered && (
+                  {phase === 'starting' && !hasAnsweredCurrentQuestion && (
+                    <div className="flex items-center gap-2 rounded-xl bg-teal-50 border border-teal-200 px-6 py-2.5 text-xs font-black text-teal-900 animate-pulse shadow-sm">
+                      <div className="w-3.5 h-3.5 rounded-full border-2 border-teal-600 border-t-transparent animate-spin" />
+                      <span>Loading first question... Please wait</span>
+                    </div>
+                  )}
+
+                  {phase === 'idle' && lastSpokenAttemptRef.current && !sessionComplete && !isLastQuestionAnswered && hasAnsweredCurrentQuestion && (
                     <button
                       onClick={async () => {
                         setPhase('thinking');
-                        await requestNextQuestion();
+                        autoNextRef.current = false;
+                        try {
+                          await requestNextQuestion();
+                        } catch {
+                          setPhase('idle');
+                        }
                       }}
                       className="rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 px-6 py-2.5 text-xs font-black text-white shadow-lg shadow-teal-600/20 transition-all active:scale-95 cursor-pointer"
                     >
@@ -540,9 +923,8 @@ export default function InterviewConsolePage() {
                       Finish Interview & View Report 🏆
                     </button>
                   )}
-                  
-                  {/* Show recording button if a question is active but we are not recording/submitting/thinking */}
-                  {(phase === 'speaking' || (phase === 'idle' && currentQuestion)) && !isLastQuestionAnswered && (
+
+                  {(phase === 'speaking' || (phase === 'idle' && currentQuestion && hasInterviewStarted)) && !isLastQuestionAnswered && !hasAnsweredCurrentQuestion && (
                     <>
                       <button
                         onClick={handleStartRecording}
@@ -551,8 +933,7 @@ export default function InterviewConsolePage() {
                         <span>🎙️ Start Recording Answer</span>
                       </button>
 
-                      {/* Allow manual submit of typed answers or edits */}
-                      {userTranscript.trim().length > 0 && (
+                      {(userTranscript.trim().length > 0 || (audio.audioBlob && audio.audioBlob.size > 0 && !audio.isRecording)) && (
                         <button
                           onClick={handleSubmitAnswer}
                           className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 px-6 py-2.5 text-xs font-black text-white shadow-md shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer"
@@ -580,17 +961,15 @@ export default function InterviewConsolePage() {
                     <>
                       <button
                         onClick={handleSubmitAnswer}
-                        className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 px-6 py-2.5 text-xs font-black text-white shadow-md shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer animate-pulse flex items-center gap-1.5"
+                        className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 px-6 py-2.5 text-xs font-black text-white shadow-md shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
                         disabled={submittingRef.current}
                       >
-                        <span>⏹️ Stop &amp; Submit Answer ➔</span>
+                        <span>✓ Submit Answer ➔</span>
                       </button>
                       <button
                         onClick={() => {
-                          audio.stopRecording();
-                          try {
-                            recognition.stopListening();
-                          } catch {}
+                          try { audio.stopRecording(); } catch {}
+                          try { recognition.stopListening(); } catch {}
                           setPhase('idle');
                         }}
                         className="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-4 py-2.5 text-xs font-bold text-slate-700 transition-all cursor-pointer shadow-xs"
@@ -618,7 +997,6 @@ export default function InterviewConsolePage() {
               </div>
             </div>
 
-            {/* Bottom status bar */}
             <div className="shrink-0 mt-1 rounded-xl border border-slate-200/90 bg-white p-3 shadow-md shadow-slate-200/50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs font-bold">
@@ -663,7 +1041,4 @@ export default function InterviewConsolePage() {
       </div>
     </div>
   );
-
-
-
 }

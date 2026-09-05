@@ -14,9 +14,9 @@ export default function ConversationTimeline({ lines, compact }: ConversationTim
   const visible = compact ? lines.slice(-3) : lines;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+    <div className="flex h-full flex-col overflow-auto rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
       <h2 className="mb-2 shrink-0 text-xs font-semibold text-gray-700">Live Transcript</h2>
-      <div className="min-h-0 flex-1 space-y-2 overflow-hidden">
+      <div className="min-h-0 flex-1 space-y-2 overflow-auto">
         {visible.length === 0 ? (
           <p className="text-xs text-gray-400">Conversation appears here…</p>
         ) : (
@@ -32,9 +32,9 @@ export default function ConversationTimeline({ lines, compact }: ConversationTim
               }`}
             >
               <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide opacity-60">
-                {line.role === 'interviewer' ? 'Priya' : line.role === 'candidate' ? 'You' : 'System'}
+                {line.role === 'interviewer' ? 'James' : line.role === 'candidate' ? 'You' : 'System'}
               </p>
-              <p className="line-clamp-3 leading-snug">{line.text}</p>
+              <p className="whitespace-pre-wrap leading-snug">{line.text}</p>
             </div>
           ))
         )}

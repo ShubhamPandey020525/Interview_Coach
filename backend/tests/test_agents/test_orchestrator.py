@@ -1,7 +1,7 @@
 import pytest
 
-from app.agents.orchestrator import decide_next_stage
-from app.services.llm_provider import FakeLLMProvider
+from AI.agents.orchestrator import decide_next_stage
+from AI.services.llm_provider import FakeLLMProvider
 
 
 def test_orchestrator_routes_technical_on_start():
@@ -38,7 +38,7 @@ def test_orchestrator_routes_learning_on_complete():
 
 @pytest.mark.asyncio
 async def test_learning_agent_produces_weak_areas():
-    from app.agents.learning_agent import learning_node
+    from AI.agents.learning_agent import learning_node
 
     llm = FakeLLMProvider()
     state = {

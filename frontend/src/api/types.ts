@@ -141,6 +141,7 @@ export interface WsQuestionPayload {
   attempt_id: string;
   agent_type: string;
   question_text: string;
+  sequence_number?: number;
   audio_url?: string | null;
 }
 
@@ -148,6 +149,9 @@ export interface WsQuestionPayload {
 export interface WsEvaluationPayload {
   attempt_id: string;
   score: number;
+  question_score?: number;
   signals: EvaluationSignal[];
   transcript?: string;
+  metrics?: Record<string, unknown>;
+  weighted_breakdown?: Record<string, unknown>;
 }

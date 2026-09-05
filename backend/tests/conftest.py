@@ -1,7 +1,16 @@
 import asyncio
 import os
+import sys
 import uuid
 from collections.abc import AsyncGenerator
+from pathlib import Path
+
+_backend_dir = Path(__file__).resolve().parents[1]
+_project_root = Path(__file__).resolve().parents[2]
+if str(_backend_dir) not in sys.path:
+    sys.path.insert(0, str(_backend_dir))
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 
 os.environ["ENVIRONMENT"] = "test"
 os.environ["SECRET_KEY"] = "test-secret-key-for-pytest-only"
@@ -39,12 +48,12 @@ def event_loop():
 
 @pytest_asyncio.fixture(autouse=True)
 async def setup_db():
-    from app.agents import graph as graph_module
+    # Reset AI package graph state directly (shim re-exports don't hold the actual variable)
+    import AI.agents.graph as _ai_graph
+    _ai_graph._session_states.clear()
+    _ai_graph._graph_instance = None
+
     from app.store import _in_memory_sessions, _in_memory_attempts, _in_memory_resumes, _in_memory_learning_plans
-    
-    graph_module._session_states.clear()
-    graph_module._graph_instance = None
-    
     _in_memory_sessions.clear()
     _in_memory_attempts.clear()
     _in_memory_resumes.clear()
